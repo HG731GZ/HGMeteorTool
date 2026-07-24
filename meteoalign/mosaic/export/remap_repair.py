@@ -14,7 +14,6 @@ except ImportError:  # pragma: no cover - OpenCV 是 remap 修补依赖。
     cv2 = None
 
 
-MOSAIC_FORWARD_REMAP_LOW_WEIGHT_THRESHOLD = 0.25
 MOSAIC_FORWARD_REMAP_PROPAGATION_MAX_RADIUS_PX = 32
 MOSAIC_FORWARD_REMAP_GUARD_MAX_SOURCE_DISTANCE_PX = 64.0
 MOSAIC_FORWARD_REMAP_LABEL_BLOCK_ROWS = 512
@@ -61,11 +60,12 @@ def finalize_forward_inverse_map(
         exact_pixels = 0
 
         if repair_mode == "exact":
-            low_weight = covered & (weights < MOSAIC_FORWARD_REMAP_LOW_WEIGHT_THRESHOLD)
-            exact_mask = target_mask & (~covered | low_weight)
+            # 稀疏地混用正向近似坐标与精确坐标会在亮星附近形成单像素跳变。
+            # 精确模式直接连续反算整个目标覆盖区，并以精确有效性替换旧 covered。
+            exact_mask = target_mask
             exact_pixels = int(np.count_nonzero(exact_mask))
             if exact_repair is not None and exact_pixels:
-                covered |= exact_repair(map_x, map_y, exact_mask)
+                covered = exact_repair(map_x, map_y, exact_mask)
         else:
             covered, fallback_mask = fill_forward_inverse_map_holes_fast(
                 map_x,
@@ -83,16 +83,18 @@ def finalize_forward_inverse_map(
                 covered |= exact_repair(map_x, map_y, fallback_mask)
 
         exact_ratio = exact_pixels / max(target_pixels, 1) * 100.0
+        exact_pixel_label = "exact coverage" if repair_mode == "exact" else "exact fallback"
         logger.info(
             (
                 "Remap repair (%s): target pixels=%s, original covered=%s, "
-                "local repaired=%s, nearest repaired=%s, exact fallback=%s (%.2f%%)"
+                "local repaired=%s, nearest repaired=%s, %s=%s (%.2f%%)"
             ),
             repair_mode,
             f"{target_pixels:,}",
             f"{original_covered_pixels:,}",
             f"{statistics.local_accepted_pixels:,}",
             f"{statistics.nearest_accepted_pixels:,}",
+            exact_pixel_label,
             f"{exact_pixels:,}",
             exact_ratio,
         )

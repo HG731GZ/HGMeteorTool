@@ -743,7 +743,7 @@ def test_mosaic_export_forward_remap_fills_projected_sampling_gaps(tmp_path) -> 
     assert source_model.projected_vector_count == 0
 
 
-def test_mosaic_export_low_weight_map_points_use_exact_reverse_projection() -> None:
+def test_mosaic_export_exact_mode_uses_continuous_full_coverage_reverse_projection() -> None:
     width, height = 5, 5
     observer = ObserverSettings(
         observation_time_utc=datetime(2025, 12, 14, 18, 11, 45, tzinfo=timezone.utc),
@@ -796,7 +796,7 @@ def test_mosaic_export_low_weight_map_points_use_exact_reverse_projection() -> N
 
     assert abs(float(map_x[2, 2]) - 2.0) < 1e-3
     assert abs(float(map_y[2, 2]) - 2.0) < 1e-3
-    assert source_model.projected_vector_count == 1
+    assert source_model.projected_vector_count == width * height
 
 
 def test_fast_forward_remap_fill_preserves_smooth_affine_coordinates() -> None:
@@ -956,8 +956,8 @@ def test_smart_repair_exactly_fills_only_fast_fallback_and_skips_low_weight(capl
     assert "Exact repair:" in caplog.text
 
 
-def test_exact_repair_includes_low_weight_pixels() -> None:
-    """精确模式应同时反算空洞和低权重像素。"""
+def test_exact_repair_replaces_the_whole_target_map() -> None:
+    """精确模式应连续反算整个目标区，不能稀疏混用近似与精确坐标。"""
 
     size = 9
     grid_x, grid_y = np.meshgrid(
@@ -985,8 +985,83 @@ def test_exact_repair_includes_low_weight_pixels() -> None:
     )
 
     assert len(exact_masks) == 1
-    assert exact_masks[0][4, 4]
-    assert exact_masks[0][2, 2]
+    assert exact_masks[0].all()
+
+
+def test_exact_repair_replaces_stale_covered_mask_with_exact_validity() -> None:
+    """精确反算判为无效的像素不得继续沿用正向累计产生的旧坐标。"""
+
+    size = 7
+    grid_x, grid_y = np.meshgrid(
+        np.arange(size, dtype=np.float32),
+        np.arange(size, dtype=np.float32),
+    )
+    weights = np.ones((size, size), dtype=np.float32)
+
+    def exact_repair(map_x: np.ndarray, map_y: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        exact_valid = mask.copy()
+        exact_valid[3, 3] = False
+        map_x[exact_valid] = grid_x[exact_valid]
+        map_y[exact_valid] = grid_y[exact_valid]
+        return exact_valid
+
+    map_x, map_y = finalize_forward_inverse_map(
+        grid_x * weights,
+        grid_y * weights,
+        weights,
+        4,
+        repair_mode="exact",
+        exact_repair=exact_repair,
+    )
+
+    assert map_x[3, 3] == -1.0
+    assert map_y[3, 3] == -1.0
+
+
+def test_discontinuous_projection_tile_falls_back_without_cross_canvas_stripes(monkeypatch) -> None:
+    """跨投影接缝的 tile 必须逐像素投影，不能在接缝两侧之间铺出碎块长条。"""
+
+    def fake_source_to_target(
+        _source_model,
+        source_pixels,
+        _target_payload,
+        *,
+        target_model=None,
+        geometry=None,
+    ):  # type: ignore[no-untyped-def]
+        del target_model, geometry
+        source = np.asarray(source_pixels, dtype=np.float64)
+        target_x = np.where(source[:, 0] < 2.0, source[:, 0] + 2.0, source[:, 0] + 96.0)
+        target_y = source[:, 1] + 2.0
+        return np.column_stack((target_x, target_y)), np.ones(source.shape[0], dtype=bool)
+
+    monkeypatch.setattr(
+        mosaic_export_module,
+        "_source_pixels_to_target_pixels",
+        fake_source_to_target,
+    )
+    accum_x = np.zeros((12, 120), dtype=np.float32)
+    accum_y = np.zeros_like(accum_x)
+    weights = np.zeros_like(accum_x)
+
+    mosaic_export_module._accumulate_equal_width_source_tiles_to_inverse_map(
+        source_model=object(),
+        target_icrs_to_pixel_payload=None,
+        target_model=object(),
+        geometry=MosaicExportGeometry(120, 12, 0, 0, 120, 12),
+        accum_x=accum_x,
+        accum_y=accum_y,
+        weights=weights,
+        x0_values=np.asarray([0], dtype=np.int64),
+        y0=0,
+        y1=4,
+        tile_width=4,
+    )
+
+    assert abs(float(weights.sum()) - 16.0) < 1e-6
+    assert np.count_nonzero(weights[:, 10:90]) == 0
+    assert np.count_nonzero(weights[:, :10]) > 0
+    assert np.count_nonzero(weights[:, 90:]) > 0
 
 
 def test_fast_repair_keeps_unaccepted_fallback_invalid() -> None:

@@ -3161,7 +3161,7 @@
                  <item>
                   <widget class="QComboBox" name="comboBoxMosaicRemapRepairMode">
                    <property name="toolTip">
-                    <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确还会处理低权重像素。</string>
+                    <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确会对整个覆盖区建立连续的精确逆映射。</string>
                    </property>
                    <property name="currentIndex">
                     <number>1</number>
@@ -3630,7 +3630,7 @@
                 <item>
                  <widget class="QComboBox" name="comboBoxMosaicBatchRemapRepairMode">
                   <property name="toolTip">
-                   <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确还会处理低权重像素。</string>
+                   <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确会对整个覆盖区建立连续的精确逆映射。</string>
                   </property>
                   <property name="currentIndex">
                    <number>1</number>

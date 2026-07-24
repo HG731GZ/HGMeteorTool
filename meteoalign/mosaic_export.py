@@ -70,6 +70,8 @@ except ImportError:  # pragma: no cover - tifftools 仅用于保留完整 EXIF I
 MOSAIC_EXPORT_TIFF_FILTER = "自适应位深 RGBA TIFF (*.tif *.tiff)"
 MOSAIC_EXPORT_DEFAULT_BLOCK_ROWS = 1024
 MOSAIC_FORWARD_REMAP_EXACT_FILL_BATCH_PIXELS = 1_000_000
+MOSAIC_FORWARD_REMAP_MAX_TILE_TARGET_SPAN_PER_SOURCE_PX = 8.0
+MOSAIC_FORWARD_REMAP_MIN_MAX_TILE_TARGET_SPAN_PX = 32.0
 MosaicExportProgressCallback = Callable[[str, int, int], None]
 SourcePixelRegion = tuple[int, int, int, int]
 
@@ -784,7 +786,7 @@ def _finalize_forward_inverse_map(
             geometry=geometry,
             progress_callback=lambda value, maximum: _emit_export_progress(
                 export_progress_callback,
-                "正在精确修复重投影空洞和低权重像素...",
+                "正在构建全覆盖区精确逆映射...",
                 value,
                 maximum,
             ),
@@ -817,7 +819,7 @@ def _fill_forward_inverse_map_exact(
     geometry: MosaicExportGeometry | None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> np.ndarray:
-    """对缺失和低权重全景图像素精确反算源图坐标，避免亮星处坐标平均出黑点。"""
+    """对指定目标像素精确反算源图坐标；精确模式会传入连续的完整覆盖区。"""
 
     exact_valid = np.zeros(exact_mask.shape, dtype=bool)
     if not np.any(exact_mask):
@@ -952,25 +954,18 @@ def _accumulate_equal_width_source_tiles_to_inverse_map(
     if tile_count <= 0 or tile_height <= 0:
         return
     if tile_width <= 1 or tile_height <= 1:
-        exact_pixels = _source_tile_row_pixels_to_target_pixels_exact(
+        _accumulate_source_tiles_to_inverse_map_exact(
             source_model=source_model,
             target_icrs_to_pixel_payload=target_icrs_to_pixel_payload,
             target_model=target_model,
             geometry=geometry,
+            accum_x=accum_x,
+            accum_y=accum_y,
+            weights=weights,
             x0_values=x0_values,
             y0=y0,
             width=tile_width,
             height=tile_height,
-        )
-        source_coords = _source_tile_coordinate_blocks(x0_values, y0, y1, tile_width).reshape((-1, 2))
-        _accumulate_source_pixels_to_inverse_map(
-            accum_x,
-            accum_y,
-            weights,
-            exact_pixels[0],
-            source_coords[:, 0],
-            source_coords[:, 1],
-            exact_pixels[1],
         )
         return
 
@@ -993,7 +988,18 @@ def _accumulate_equal_width_source_tiles_to_inverse_map(
     )
     sample_target = sample_target.reshape((tile_count, 5, 2))
     sample_valid = sample_valid.reshape((tile_count, 5))
-    valid_tiles = np.all(sample_valid, axis=1)
+    fully_valid_tiles = np.all(sample_valid, axis=1)
+    sample_span = np.ptp(sample_target, axis=1)
+    maximum_interpolated_span = max(
+        MOSAIC_FORWARD_REMAP_MIN_MAX_TILE_TARGET_SPAN_PX,
+        MOSAIC_FORWARD_REMAP_MAX_TILE_TARGET_SPAN_PER_SOURCE_PX
+        * max(float(tile_width - 1), float(tile_height - 1), 1.0),
+    )
+    discontinuous_tiles = fully_valid_tiles & np.any(
+        sample_span > maximum_interpolated_span,
+        axis=1,
+    )
+    valid_tiles = fully_valid_tiles & ~discontinuous_tiles
 
     if np.any(valid_tiles):
         local_x = np.arange(tile_width, dtype=np.float64)
@@ -1025,7 +1031,24 @@ def _accumulate_equal_width_source_tiles_to_inverse_map(
             np.ones(target_pixels.shape[:3], dtype=bool).reshape(-1),
         )
 
-    # 固定 tile 模式不再对无效或剧烈变化区域逐像素兜底，避免边界区域拖慢批处理。
+    if np.any(discontinuous_tiles):
+        # 等距圆柱、墨卡托等投影的接缝两侧坐标都可能有限，但不能跨画布插值。
+        # 这类 tile 数量很少，逐源像素投影可保留接缝两侧内容而不产生长条碎块。
+        _accumulate_source_tiles_to_inverse_map_exact(
+            source_model=source_model,
+            target_icrs_to_pixel_payload=target_icrs_to_pixel_payload,
+            target_model=target_model,
+            geometry=geometry,
+            accum_x=accum_x,
+            accum_y=accum_y,
+            weights=weights,
+            x0_values=x0_values[discontinuous_tiles],
+            y0=y0,
+            width=tile_width,
+            height=tile_height,
+        )
+
+    # 含无效采样点的边界 tile 继续留空，交由 target mask 与精确 fallback 判定。
 
 
 def _source_tile_coordinate_blocks(
@@ -1069,6 +1092,49 @@ def _source_tile_row_pixels_to_target_pixels_exact(
         target_icrs_to_pixel_payload,
         target_model=target_model,
         geometry=geometry,
+    )
+
+
+def _accumulate_source_tiles_to_inverse_map_exact(
+    *,
+    source_model: object,
+    target_icrs_to_pixel_payload: dict[str, object] | None,
+    target_model: object | None,
+    geometry: MosaicExportGeometry,
+    accum_x: np.ndarray,
+    accum_y: np.ndarray,
+    weights: np.ndarray,
+    x0_values: np.ndarray,
+    y0: int,
+    width: int,
+    height: int,
+) -> None:
+    """逐像素投影少量不能安全插值的源 tile。"""
+
+    exact_target_pixels, exact_valid = _source_tile_row_pixels_to_target_pixels_exact(
+        source_model=source_model,
+        target_icrs_to_pixel_payload=target_icrs_to_pixel_payload,
+        target_model=target_model,
+        geometry=geometry,
+        x0_values=x0_values,
+        y0=y0,
+        width=width,
+        height=height,
+    )
+    source_coords = _source_tile_coordinate_blocks(
+        x0_values,
+        y0,
+        y0 + height,
+        width,
+    ).reshape((-1, 2))
+    _accumulate_source_pixels_to_inverse_map(
+        accum_x,
+        accum_y,
+        weights,
+        exact_target_pixels,
+        source_coords[:, 0],
+        source_coords[:, 1],
+        exact_valid,
     )
 
 
