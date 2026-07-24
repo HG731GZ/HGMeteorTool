@@ -53,6 +53,7 @@ from ..mosaic_export import (
     write_mosaic_reprojection_tiff,
 )
 from ..mosaic.export.geometry import mosaic_export_cropped_geometry
+from ..mosaic.export.remap_repair import REMAP_REPAIR_MODES, RemapRepairMode
 from ..mosaic.export.target_transform import (
     build_target_icrs_to_pixel_transform_payload,
     target_icrs_to_pixel_transform_payload_matches,
@@ -776,10 +777,13 @@ class MosaicProjectionMixin:
     def _mosaic_tiff_lzw_compression_enabled(self) -> bool:
         return bool(getattr(self.ui_config, "mosaic_export_tiff_lzw_compression", True))
 
-    def _mosaic_exact_remap_repair_enabled(self) -> bool:
-        if not hasattr(self.ui, "checkBoxMosaicExactRemapRepair"):
-            return False
-        return bool(self.ui.checkBoxMosaicExactRemapRepair.isChecked())
+    def _mosaic_remap_repair_mode(self) -> RemapRepairMode:
+        if not hasattr(self.ui, "comboBoxMosaicRemapRepairMode"):
+            return "smart"
+        index = int(self.ui.comboBoxMosaicRemapRepairMode.currentIndex())
+        if 0 <= index < len(REMAP_REPAIR_MODES):
+            return REMAP_REPAIR_MODES[index]
+        return "smart"
 
     def _set_mosaic_output_resolution(
         self,
@@ -1261,7 +1265,7 @@ class MosaicProjectionMixin:
                 export_progress_callback=update_export_progress,
                 target_icrs_to_pixel_payload=self._mosaic_target_icrs_to_pixel_payload,
                 map_tile_size_px=self._mosaic_map_tile_size_px(),
-                exact_remap_repair=self._mosaic_exact_remap_repair_enabled(),
+                repair_mode=self._mosaic_remap_repair_mode(),
                 tiff_lzw_compression=self._mosaic_tiff_lzw_compression_enabled(),
                 source_pixel_regions=self._mosaic_source_pixel_regions(active_source),
             )

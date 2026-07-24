@@ -221,7 +221,7 @@ def _worker_task(row: int, tmp_path: Path) -> MosaicBatchExportTask:
         base_model=None,
         block_rows=8,
         map_tile_size_px=4,
-        exact_remap_repair=False,
+        repair_mode="fast",
         tiff_lzw_compression=False,
         source_pixel_regions=None,
     )
@@ -309,7 +309,7 @@ def test_mosaic_batch_applies_gradient_in_memory_before_reprojection(
         base_model=SimpleNamespace(model=object()),
         block_rows=8,
         map_tile_size_px=4,
-        exact_remap_repair=False,
+        repair_mode="fast",
         tiff_lzw_compression=False,
         source_pixel_regions=None,
         gradient_solution=object(),  # type: ignore[arg-type]
@@ -374,7 +374,7 @@ def test_mosaic_batch_applies_shared_gradient_to_unrecorded_source(
         base_model=SimpleNamespace(model=object()),
         block_rows=8,
         map_tile_size_px=4,
-        exact_remap_repair=False,
+        repair_mode="fast",
         tiff_lzw_compression=False,
         source_pixel_regions=None,
         gradient_solution=object(),  # type: ignore[arg-type]

@@ -3149,16 +3149,38 @@
                      <height>20</height>
                     </size>
                    </property>
-                  </spacer>
+                 </spacer>
                  </item>
                  <item>
-                  <widget class="QCheckBox" name="checkBoxMosaicExactRemapRepair">
-                   <property name="toolTip">
-                    <string>鱼眼亮星出现小黑点时可启用；会额外精确反算缺失和低权重像素，导出更慢。</string>
-                   </property>
+                  <widget class="QLabel" name="labelMosaicRemapRepairMode">
                    <property name="text">
-                    <string>修复亮星小黑点（较慢）</string>
+                    <string>空洞修复</string>
                    </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="comboBoxMosaicRemapRepairMode">
+                   <property name="toolTip">
+                    <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确还会处理低权重像素。</string>
+                   </property>
+                   <property name="currentIndex">
+                    <number>1</number>
+                   </property>
+                   <item>
+                    <property name="text">
+                     <string>快速</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>智能（推荐）</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>精确</string>
+                    </property>
+                   </item>
                   </widget>
                  </item>
                 </layout>
@@ -3594,18 +3616,44 @@
                    </property>
                   </widget>
                  </item>
-                </layout>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="checkBoxMosaicBatchExactRemapRepair">
-                 <property name="toolTip">
-                  <string>鱼眼亮星出现小黑点时可启用；会额外精确反算缺失和低权重像素，导出更慢。</string>
-                 </property>
-                 <property name="text">
-                  <string>修复亮星小黑点（较慢）</string>
-                 </property>
-                </widget>
-               </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayoutMosaicBatchRemapRepairMode">
+                <item>
+                 <widget class="QLabel" name="labelMosaicBatchRemapRepairMode">
+                  <property name="text">
+                   <string>空洞修复</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="comboBoxMosaicBatchRemapRepairMode">
+                  <property name="toolTip">
+                   <string>快速仅保留可靠的局部修复；智能仅对剩余空洞精确反算；精确还会处理低权重像素。</string>
+                  </property>
+                  <property name="currentIndex">
+                   <number>1</number>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>快速</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>智能（推荐）</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>精确</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+               </layout>
+              </item>
               </layout>
              </widget>
             </item>

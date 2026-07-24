@@ -55,6 +55,28 @@ DYNAMIC_INFORMATION_LABELS = (
 )
 
 
+def test_mosaic_repair_mode_controls_default_to_smart() -> None:
+    """单张与批处理导出都应提供三档修复模式，并默认选择智能。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    for combo in (
+        ui.comboBoxMosaicRemapRepairMode,
+        ui.comboBoxMosaicBatchRemapRepairMode,
+    ):
+        assert [combo.itemText(index) for index in range(combo.count())] == [
+            "快速",
+            "智能（推荐）",
+            "精确",
+        ]
+        assert combo.currentIndex() == 1
+
+    window.close()
+
+
 def test_preview_navigation_buttons_use_arrow_key_shortcuts() -> None:
     """右侧预览获得焦点时应使用左右方向键触发对应按钮。"""
 

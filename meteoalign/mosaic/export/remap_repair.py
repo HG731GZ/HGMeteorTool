@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Callable
+import logging
+from dataclasses import dataclass
+from typing import Callable, Literal
 
 import numpy as np
 
@@ -16,6 +18,18 @@ MOSAIC_FORWARD_REMAP_LOW_WEIGHT_THRESHOLD = 0.25
 MOSAIC_FORWARD_REMAP_PROPAGATION_MAX_RADIUS_PX = 32
 MOSAIC_FORWARD_REMAP_GUARD_MAX_SOURCE_DISTANCE_PX = 64.0
 MOSAIC_FORWARD_REMAP_LABEL_BLOCK_ROWS = 512
+MOSAIC_FORWARD_REMAP_SAFE_NEAREST_DISTANCE_PX = 2.0
+
+RemapRepairMode = Literal["fast", "smart", "exact"]
+REMAP_REPAIR_MODES: tuple[RemapRepairMode, ...] = ("fast", "smart", "exact")
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _FastRepairStatistics:
+    local_accepted_pixels: int = 0
+    nearest_accepted_pixels: int = 0
 
 
 def finalize_forward_inverse_map(
@@ -24,25 +38,36 @@ def finalize_forward_inverse_map(
     weights: np.ndarray,
     tile_size: int,
     *,
-    exact_remap_repair: bool,
+    repair_mode: RemapRepairMode,
     exact_repair: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray] | None = None,
     fast_progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """将正向累计坐标原位转换为 OpenCV 可用的逆向 map。"""
+
+    if repair_mode not in REMAP_REPAIR_MODES:
+        raise ValueError(f"不支持的重投影空洞修复模式：{repair_mode!r}")
 
     # 累积数组在收尾后不再使用，直接复用可少保留两张全尺寸 float32 画布。
     map_x = _reusable_float32_map(accum_x)
     map_y = _reusable_float32_map(accum_y)
     covered = weights > 1e-6
     if np.any(covered):
+        original_covered_pixels = int(np.count_nonzero(covered))
         np.divide(map_x, weights, out=map_x, where=covered)
         np.divide(map_y, weights, out=map_y, where=covered)
         target_mask = forward_inverse_map_target_mask(covered, tile_size)
-        if exact_remap_repair and exact_repair is not None:
+        target_pixels = int(np.count_nonzero(target_mask))
+        statistics = _FastRepairStatistics()
+        exact_pixels = 0
+
+        if repair_mode == "exact":
             low_weight = covered & (weights < MOSAIC_FORWARD_REMAP_LOW_WEIGHT_THRESHOLD)
-            covered |= exact_repair(map_x, map_y, target_mask & (~covered | low_weight))
-        elif not exact_remap_repair:
-            covered = fill_forward_inverse_map_holes_fast(
+            exact_mask = target_mask & (~covered | low_weight)
+            exact_pixels = int(np.count_nonzero(exact_mask))
+            if exact_repair is not None and exact_pixels:
+                covered |= exact_repair(map_x, map_y, exact_mask)
+        else:
+            covered, fallback_mask = fill_forward_inverse_map_holes_fast(
                 map_x,
                 map_y,
                 covered,
@@ -50,6 +75,33 @@ def finalize_forward_inverse_map(
                 tile_size=tile_size,
                 work_buffer=weights,
                 progress_callback=fast_progress_callback,
+                local_iterations=2 if repair_mode == "smart" else 1,
+                statistics=statistics,
+            )
+            exact_pixels = int(np.count_nonzero(fallback_mask))
+            if repair_mode == "smart" and exact_repair is not None and exact_pixels:
+                covered |= exact_repair(map_x, map_y, fallback_mask)
+
+        exact_ratio = exact_pixels / max(target_pixels, 1) * 100.0
+        logger.info(
+            (
+                "Remap repair (%s): target pixels=%s, original covered=%s, "
+                "local repaired=%s, nearest repaired=%s, exact fallback=%s (%.2f%%)"
+            ),
+            repair_mode,
+            f"{target_pixels:,}",
+            f"{original_covered_pixels:,}",
+            f"{statistics.local_accepted_pixels:,}",
+            f"{statistics.nearest_accepted_pixels:,}",
+            f"{exact_pixels:,}",
+            exact_ratio,
+        )
+        if repair_mode in {"smart", "exact"}:
+            logger.info(
+                "Exact repair: %s / %s pixels (%.2f%%)",
+                f"{exact_pixels:,}",
+                f"{target_pixels:,}",
+                exact_ratio,
             )
     map_x[~covered] = -1.0
     map_y[~covered] = -1.0
@@ -96,16 +148,21 @@ def fill_forward_inverse_map_holes_fast(
     tile_size: int = 16,
     work_buffer: np.ndarray | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
-) -> np.ndarray:
-    """单次传播有效坐标，并用局部均值与大范围均值共同保护投影边界。"""
+    local_iterations: int = 1,
+    statistics: _FastRepairStatistics | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """传播可靠坐标，返回快速修复覆盖区和需精确反算的剩余区域。"""
 
     if cv2 is None:
-        return covered
+        fast_covered = covered.copy()
+        return fast_covered, target_mask & ~fast_covered
+    safe_local_iterations = max(1, min(2, int(local_iterations)))
+    fast_covered = covered.copy()
     missing = target_mask & ~covered
     if not np.any(missing):
-        return covered
+        return fast_covered, missing
 
-    maximum = 8
+    maximum = 5 + safe_local_iterations * 2
     if progress_callback is not None:
         progress_callback(0, maximum)
 
@@ -121,7 +178,7 @@ def fill_forward_inverse_map_holes_fast(
         scratch = work_buffer
     else:
         scratch = np.empty_like(map_x, dtype=np.float32)
-    scratch[...] = covered
+    scratch[...] = fast_covered
     guard_count = cv2.boxFilter(
         scratch,
         cv2.CV_32F,
@@ -134,7 +191,7 @@ def fill_forward_inverse_map_holes_fast(
         progress_callback(1, maximum)
 
     scratch.fill(0.0)
-    np.copyto(scratch, map_x, where=covered)
+    np.copyto(scratch, map_x, where=fast_covered)
     guard_x = cv2.boxFilter(
         scratch,
         cv2.CV_32F,
@@ -149,7 +206,7 @@ def fill_forward_inverse_map_holes_fast(
         progress_callback(2, maximum)
 
     scratch.fill(0.0)
-    np.copyto(scratch, map_y, where=covered)
+    np.copyto(scratch, map_y, where=fast_covered)
     guard_y = cv2.boxFilter(
         scratch,
         cv2.CV_32F,
@@ -163,76 +220,97 @@ def fill_forward_inverse_map_holes_fast(
     if progress_callback is not None:
         progress_callback(3, maximum)
 
-    scratch[...] = covered
-    local_count = cv2.boxFilter(
-        scratch,
-        cv2.CV_32F,
-        (3, 3),
-        normalize=False,
-        borderType=cv2.BORDER_CONSTANT,
-    )
-    local_fillable = missing & (local_count > 0.0)
-    scratch.fill(0.0)
-    np.copyto(scratch, map_x, where=covered)
-    local_x = cv2.boxFilter(
-        scratch,
-        cv2.CV_32F,
-        (3, 3),
-        normalize=False,
-        borderType=cv2.BORDER_CONSTANT,
-    )
-    np.divide(local_x, local_count, out=local_x, where=local_fillable)
-    if progress_callback is not None:
-        progress_callback(4, maximum)
-
-    scratch.fill(0.0)
-    np.copyto(scratch, map_y, where=covered)
-    local_y = cv2.boxFilter(
-        scratch,
-        cv2.CV_32F,
-        (3, 3),
-        normalize=False,
-        borderType=cv2.BORDER_CONSTANT,
-    )
-    np.divide(local_y, local_count, out=local_y, where=local_fillable)
-    del local_count, scratch
-
     guard_distance = min(
         MOSAIC_FORWARD_REMAP_GUARD_MAX_SOURCE_DISTANCE_PX,
         max(4.0, float(tile_size) * 2.0),
     )
-    _apply_guarded_candidate_maps(
-        map_x,
-        map_y,
-        local_x,
-        local_y,
-        local_fillable,
-        guard_distance,
-    )
-    del local_x, local_y
-    if progress_callback is not None:
-        progress_callback(5, maximum)
+    local_accepted_pixels = 0
+    progress_value = 3
+    for _iteration in range(safe_local_iterations):
+        scratch[...] = fast_covered
+        local_count = cv2.boxFilter(
+            scratch,
+            cv2.CV_32F,
+            (3, 3),
+            normalize=False,
+            borderType=cv2.BORDER_CONSTANT,
+        )
+        local_fillable = target_mask & ~fast_covered & (local_count > 0.0)
+        if not np.any(local_fillable):
+            del local_count, local_fillable
+            break
 
-    remaining = missing & ~local_fillable
-    if progress_callback is not None:
-        progress_callback(6, maximum)
+        scratch.fill(0.0)
+        np.copyto(scratch, map_x, where=fast_covered)
+        local_x = cv2.boxFilter(
+            scratch,
+            cv2.CV_32F,
+            (3, 3),
+            normalize=False,
+            borderType=cv2.BORDER_CONSTANT,
+        )
+        np.divide(local_x, local_count, out=local_x, where=local_fillable)
+        progress_value += 1
+        if progress_callback is not None:
+            progress_callback(progress_value, maximum)
+
+        scratch.fill(0.0)
+        np.copyto(scratch, map_y, where=fast_covered)
+        local_y = cv2.boxFilter(
+            scratch,
+            cv2.CV_32F,
+            (3, 3),
+            normalize=False,
+            borderType=cv2.BORDER_CONSTANT,
+        )
+        np.divide(local_y, local_count, out=local_y, where=local_fillable)
+        del local_count
+        _apply_guarded_candidate_maps(
+            map_x,
+            map_y,
+            local_x,
+            local_y,
+            local_fillable,
+            guard_distance,
+        )
+        del local_x, local_y
+        accepted_count = int(np.count_nonzero(local_fillable))
+        local_accepted_pixels += accepted_count
+        fast_covered |= local_fillable
+        progress_value += 1
+        if progress_callback is not None:
+            progress_callback(progress_value, maximum)
+        if accepted_count == 0:
+            break
+
+    del scratch
+    remaining = target_mask & ~fast_covered
     if np.any(remaining):
         _fill_remaining_from_nearest_covered(
             map_x,
             map_y,
-            covered,
+            fast_covered,
             remaining,
             guard_distance,
+            maximum_target_distance_px=MOSAIC_FORWARD_REMAP_SAFE_NEAREST_DISTANCE_PX,
         )
+        fast_covered |= remaining
+    nearest_accepted_pixels = int(np.count_nonzero(remaining))
+    if statistics is not None:
+        statistics.local_accepted_pixels = local_accepted_pixels
+        statistics.nearest_accepted_pixels = nearest_accepted_pixels
     if progress_callback is not None:
-        progress_callback(7, maximum)
+        progress_callback(maximum - 1, maximum)
 
-    filled = covered | guard_fillable
-    map_x[~filled] = -1.0
-    map_y[~filled] = -1.0
+    # missing 已不再参与其他计算，原位复用为 fallback，避免再分配全尺寸 bool 画布。
+    np.logical_not(fast_covered, out=missing)
+    np.logical_and(missing, target_mask, out=missing)
+    fallback_mask = missing
+    map_x[~fast_covered] = -1.0
+    map_y[~fast_covered] = -1.0
     if progress_callback is not None:
         progress_callback(maximum, maximum)
-    return filled
+    return fast_covered, fallback_mask
 
 
 def _apply_guarded_candidate_maps(
@@ -242,7 +320,7 @@ def _apply_guarded_candidate_maps(
     candidate_y: np.ndarray,
     candidate_mask: np.ndarray,
     maximum_source_distance_px: float,
-) -> None:
+) -> np.ndarray:
     """候选坐标与大范围保护值相近时才覆盖，避免跨投影边界传播。"""
 
     safe_rows = max(1, int(MOSAIC_FORWARD_REMAP_LABEL_BLOCK_ROWS))
@@ -255,12 +333,14 @@ def _apply_guarded_candidate_maps(
         delta_x = candidate_x[row_start:row_end] - map_x[row_start:row_end]
         delta_y = candidate_y[row_start:row_end] - map_y[row_start:row_end]
         accepted = mask_block & (delta_x * delta_x + delta_y * delta_y <= threshold_squared)
+        mask_block[:] = accepted
         map_x_block = map_x[row_start:row_end]
         map_y_block = map_y[row_start:row_end]
         candidate_x_block = candidate_x[row_start:row_end]
         candidate_y_block = candidate_y[row_start:row_end]
         map_x_block[accepted] = candidate_x_block[accepted]
         map_y_block[accepted] = candidate_y_block[accepted]
+    return candidate_mask
 
 
 def _fill_remaining_from_nearest_covered(
@@ -269,7 +349,9 @@ def _fill_remaining_from_nearest_covered(
     covered: np.ndarray,
     remaining: np.ndarray,
     maximum_source_distance_px: float,
-) -> None:
+    *,
+    maximum_target_distance_px: float,
+) -> np.ndarray:
     """用距离变换一次定位最近有效坐标，并继续应用投影边界保护。"""
 
     distance_input = (~covered).astype(np.uint8)
@@ -279,7 +361,7 @@ def _fill_remaining_from_nearest_covered(
         5,
         labelType=cv2.DIST_LABEL_PIXEL,
     )
-    del distance, distance_input
+    del distance_input
     maximum_label = int(labels.max())
     nearest_x = np.full(maximum_label + 1, -1.0, dtype=np.float32)
     nearest_y = np.full(maximum_label + 1, -1.0, dtype=np.float32)
@@ -306,6 +388,13 @@ def _fill_remaining_from_nearest_covered(
         map_y_block = map_y[row_start:row_end]
         delta_x = candidate_x - map_x_block
         delta_y = candidate_y - map_y_block
-        accepted = remaining_block & (delta_x * delta_x + delta_y * delta_y <= threshold_squared)
+        distance_block = distance[row_start:row_end]
+        accepted = (
+            remaining_block
+            & (distance_block <= float(maximum_target_distance_px))
+            & (delta_x * delta_x + delta_y * delta_y <= threshold_squared)
+        )
+        remaining_block[:] = accepted
         map_x_block[accepted] = candidate_x[accepted]
         map_y_block[accepted] = candidate_y[accepted]
+    return remaining

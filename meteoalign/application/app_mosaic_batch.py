@@ -39,6 +39,7 @@ from ..mosaic_export import (
     write_mosaic_reprojection_tiff,
 )
 from ..mosaic.export.geometry import MosaicExportGeometry
+from ..mosaic.export.remap_repair import REMAP_REPAIR_MODES, RemapRepairMode
 from ..mosaic.export.target_transform import target_icrs_to_pixel_transform_payload_matches
 from ..mosaic.framing import MOSAIC_FRAMING_SCHEMA
 from ..mosaic.model_io import MosaicSourceModel, _load_mosaic_source_model
@@ -95,7 +96,7 @@ class MosaicBatchExportTask:
     base_model: MosaicSourceModel | None
     block_rows: int
     map_tile_size_px: int
-    exact_remap_repair: bool
+    repair_mode: RemapRepairMode
     tiff_lzw_compression: bool
     source_pixel_regions: tuple[tuple[int, int, int, int], ...] | None
     gradient_solution: PhotometricSolution | None = None
@@ -165,7 +166,7 @@ def _write_mosaic_batch_export_task(
             ),
             target_model=None if task.base_model is None else task.base_model.model,
             map_tile_size_px=task.map_tile_size_px,
-            exact_remap_repair=task.exact_remap_repair,
+            repair_mode=task.repair_mode,
             tiff_lzw_compression=task.tiff_lzw_compression,
             source_pixel_regions=task.source_pixel_regions,
         )
@@ -448,7 +449,7 @@ class MosaicBatchMixin:
         for control_name in (
             "checkBoxMosaicBatchMeteorOnly",
             "doubleSpinBoxMosaicBatchMapTileSize",
-            "checkBoxMosaicBatchExactRemapRepair",
+            "comboBoxMosaicBatchRemapRepairMode",
         ):
             if hasattr(self.ui, control_name):
                 getattr(self.ui, control_name).setEnabled(not batch_active)
@@ -1119,7 +1120,7 @@ class MosaicBatchMixin:
         base_model = self._mosaic_batch_base_model if not self._mosaic_batch_is_sky_mode() else None
         block_rows = self._mosaic_export_block_rows()
         map_tile_size_px = self._mosaic_batch_map_tile_size_px()
-        exact_remap_repair = self._mosaic_batch_exact_remap_repair_enabled()
+        repair_mode = self._mosaic_batch_remap_repair_mode()
         tiff_lzw_compression = self._mosaic_tiff_lzw_compression_enabled()
         gradient_solution = (
             getattr(self, "_mosaic_batch_gradient_solution", None)
@@ -1147,7 +1148,7 @@ class MosaicBatchMixin:
                     base_model=base_model,
                     block_rows=block_rows,
                     map_tile_size_px=map_tile_size_px,
-                    exact_remap_repair=exact_remap_repair,
+                    repair_mode=repair_mode,
                     tiff_lzw_compression=tiff_lzw_compression,
                     source_pixel_regions=self._mosaic_batch_item_source_regions(item),
                     gradient_solution=gradient_solution,
@@ -1314,13 +1315,17 @@ class MosaicBatchMixin:
             return int(method())
         return 4
 
-    def _mosaic_batch_exact_remap_repair_enabled(self) -> bool:
-        if hasattr(self.ui, "checkBoxMosaicBatchExactRemapRepair"):
-            return bool(self.ui.checkBoxMosaicBatchExactRemapRepair.isChecked())
-        method = getattr(self, "_mosaic_exact_remap_repair_enabled", None)
+    def _mosaic_batch_remap_repair_mode(self) -> RemapRepairMode:
+        if hasattr(self.ui, "comboBoxMosaicBatchRemapRepairMode"):
+            index = int(self.ui.comboBoxMosaicBatchRemapRepairMode.currentIndex())
+            if 0 <= index < len(REMAP_REPAIR_MODES):
+                return REMAP_REPAIR_MODES[index]
+        method = getattr(self, "_mosaic_remap_repair_mode", None)
         if callable(method):
-            return bool(method())
-        return False
+            mode = method()
+            if mode in REMAP_REPAIR_MODES:
+                return mode
+        return "smart"
 
     def _mosaic_batch_config_map_tile_size_px(self) -> int:
         configured = getattr(self.ui_config, "mosaic_map_tile_size_px", 4)

@@ -7,7 +7,12 @@ import tifffile
 
 import meteoalign.mosaic_export as mosaic_export_module
 from meteoalign.coordinates import unit_vectors_to_radec
-from meteoalign.mosaic.export.remap_repair import fill_forward_inverse_map_holes_fast
+from meteoalign.mosaic.export.remap_repair import (
+    _apply_guarded_candidate_maps,
+    _fill_remaining_from_nearest_covered,
+    fill_forward_inverse_map_holes_fast,
+    finalize_forward_inverse_map,
+)
 from meteoalign.mosaic_export import (
     MosaicExportGeometry,
     MosaicExportSourceImage,
@@ -786,7 +791,7 @@ def test_mosaic_export_low_weight_map_points_use_exact_reverse_projection() -> N
         4,
         source_model=source_model,
         target_icrs_to_pixel_payload=target_transform_payload,
-        exact_remap_repair=True,
+        repair_mode="exact",
     )
 
     assert abs(float(map_x[2, 2]) - 2.0) < 1e-3
@@ -795,7 +800,7 @@ def test_mosaic_export_low_weight_map_points_use_exact_reverse_projection() -> N
 
 
 def test_fast_forward_remap_fill_preserves_smooth_affine_coordinates() -> None:
-    """单次传播应填满内部空洞，并保持平滑仿射映射的坐标精度。"""
+    """快速传播只接纳安全像素，其余内部空洞应保持无效并进入 fallback。"""
 
     height, width = 72, 96
     grid_x, grid_y = np.meshgrid(
@@ -812,7 +817,7 @@ def test_fast_forward_remap_fill_preserves_smooth_affine_coordinates() -> None:
     map_y = np.where(covered, expected_y, -1.0).astype(np.float32)
     progress: list[tuple[int, int]] = []
 
-    filled = fill_forward_inverse_map_holes_fast(
+    filled, fallback = fill_forward_inverse_map_holes_fast(
         map_x,
         map_y,
         covered,
@@ -822,12 +827,195 @@ def test_fast_forward_remap_fill_preserves_smooth_affine_coordinates() -> None:
     )
 
     missing = ~covered
-    errors = np.hypot(map_x[missing] - expected_x[missing], map_y[missing] - expected_y[missing])
-    assert filled.all()
+    repaired = missing & filled
+    errors = np.hypot(map_x[repaired] - expected_x[repaired], map_y[repaired] - expected_y[repaired])
+    assert repaired.any()
+    assert fallback.any()
+    assert np.array_equal(fallback, target_mask & ~filled)
+    assert np.all(map_x[fallback] == -1.0)
+    assert np.all(map_y[fallback] == -1.0)
     assert float(np.percentile(errors, 99)) < 5.0
     assert float(np.max(errors)) < 5.0
     assert progress[0][0] == 0
     assert progress[-1][0] == progress[-1][1]
+
+
+def test_second_guarded_local_iteration_reduces_smart_fallback() -> None:
+    """智能模式的第二轮局部修复应继续缩小需要精确反算的空洞。"""
+
+    size = 33
+    grid_x, grid_y = np.meshgrid(
+        np.arange(size, dtype=np.float32),
+        np.arange(size, dtype=np.float32),
+    )
+    covered = np.ones((size, size), dtype=bool)
+    covered[9:24, 9:24] = False
+    target_mask = np.ones_like(covered)
+
+    fallback_counts: list[int] = []
+    for local_iterations in (1, 2):
+        map_x = np.where(covered, grid_x, -1.0).astype(np.float32)
+        map_y = np.where(covered, grid_y, -1.0).astype(np.float32)
+        _fast_covered, fallback = fill_forward_inverse_map_holes_fast(
+            map_x,
+            map_y,
+            covered,
+            target_mask,
+            tile_size=4,
+            local_iterations=local_iterations,
+        )
+        fallback_counts.append(int(np.count_nonzero(fallback)))
+
+    assert fallback_counts[1] < fallback_counts[0]
+
+
+def test_guarded_candidate_mask_is_replaced_with_only_accepted_pixels() -> None:
+    """候选但未通过 source coordinate 连续性检查的像素不能被标记为有效。"""
+
+    map_x = np.zeros((1, 2), dtype=np.float32)
+    map_y = np.zeros((1, 2), dtype=np.float32)
+    candidate_x = np.asarray([[1.0, 100.0]], dtype=np.float32)
+    candidate_y = np.zeros((1, 2), dtype=np.float32)
+    candidate_mask = np.ones((1, 2), dtype=bool)
+
+    accepted = _apply_guarded_candidate_maps(
+        map_x,
+        map_y,
+        candidate_x,
+        candidate_y,
+        candidate_mask,
+        maximum_source_distance_px=4.0,
+    )
+
+    assert accepted is candidate_mask
+    assert candidate_mask.tolist() == [[True, False]]
+    assert map_x.tolist() == [[1.0, 0.0]]
+
+
+def test_nearest_repair_rejects_pixels_beyond_safe_target_distance() -> None:
+    """最近邻 source coordinate 即使连续，也不能跨过超过安全距离的目标空洞。"""
+
+    covered = np.zeros((1, 5), dtype=bool)
+    covered[0, 0] = True
+    map_x = np.zeros((1, 5), dtype=np.float32)
+    map_y = np.zeros((1, 5), dtype=np.float32)
+    remaining = np.zeros((1, 5), dtype=bool)
+    remaining[0, 1] = True
+    remaining[0, 3] = True
+
+    accepted = _fill_remaining_from_nearest_covered(
+        map_x,
+        map_y,
+        covered,
+        remaining,
+        maximum_source_distance_px=4.0,
+        maximum_target_distance_px=2.0,
+    )
+
+    assert accepted is remaining
+    assert remaining.tolist() == [[False, True, False, False, False]]
+
+
+def test_smart_repair_exactly_fills_only_fast_fallback_and_skips_low_weight(caplog) -> None:
+    """智能模式只反算快速修复后的真实空洞，不处理仍有覆盖的低权重点。"""
+
+    size = 33
+    grid_x, grid_y = np.meshgrid(
+        np.arange(size, dtype=np.float32),
+        np.arange(size, dtype=np.float32),
+    )
+    weights = np.ones((size, size), dtype=np.float32)
+    weights[9:24, 9:24] = 0.0
+    weights[2, 2] = 0.1
+    accum_x = grid_x * weights
+    accum_y = grid_y * weights
+    exact_masks: list[np.ndarray] = []
+
+    def exact_repair(map_x: np.ndarray, map_y: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        exact_masks.append(mask.copy())
+        map_x[mask] = grid_x[mask]
+        map_y[mask] = grid_y[mask]
+        return mask.copy()
+
+    with caplog.at_level("INFO", logger="meteoalign.mosaic.export.remap_repair"):
+        map_x, map_y = finalize_forward_inverse_map(
+            accum_x,
+            accum_y,
+            weights,
+            4,
+            repair_mode="smart",
+            exact_repair=exact_repair,
+        )
+
+    assert len(exact_masks) == 1
+    assert exact_masks[0].any()
+    assert not exact_masks[0][2, 2]
+    assert np.all(map_x[exact_masks[0]] >= 0.0)
+    assert np.all(map_y[exact_masks[0]] >= 0.0)
+    assert "exact fallback=" in caplog.text
+    assert "Exact repair:" in caplog.text
+
+
+def test_exact_repair_includes_low_weight_pixels() -> None:
+    """精确模式应同时反算空洞和低权重像素。"""
+
+    size = 9
+    grid_x, grid_y = np.meshgrid(
+        np.arange(size, dtype=np.float32),
+        np.arange(size, dtype=np.float32),
+    )
+    weights = np.ones((size, size), dtype=np.float32)
+    weights[4, 4] = 0.0
+    weights[2, 2] = 0.1
+    exact_masks: list[np.ndarray] = []
+
+    def exact_repair(map_x: np.ndarray, map_y: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        exact_masks.append(mask.copy())
+        map_x[mask] = grid_x[mask]
+        map_y[mask] = grid_y[mask]
+        return mask.copy()
+
+    finalize_forward_inverse_map(
+        grid_x * weights,
+        grid_y * weights,
+        weights,
+        4,
+        repair_mode="exact",
+        exact_repair=exact_repair,
+    )
+
+    assert len(exact_masks) == 1
+    assert exact_masks[0][4, 4]
+    assert exact_masks[0][2, 2]
+
+
+def test_fast_repair_keeps_unaccepted_fallback_invalid() -> None:
+    """快速模式不得调用精确反算，所有未接纳 fallback 必须保留为 -1。"""
+
+    size = 33
+    grid_x, grid_y = np.meshgrid(
+        np.arange(size, dtype=np.float32),
+        np.arange(size, dtype=np.float32),
+    )
+    weights = np.ones((size, size), dtype=np.float32)
+    weights[9:24, 9:24] = 0.0
+
+    def forbidden_exact(*_args):  # type: ignore[no-untyped-def]
+        raise AssertionError("快速模式不应调用精确反算")
+
+    map_x, map_y = finalize_forward_inverse_map(
+        grid_x * weights,
+        grid_y * weights,
+        weights,
+        4,
+        repair_mode="fast",
+        exact_repair=forbidden_exact,
+    )
+
+    invalid = (map_x < 0.0) | (map_y < 0.0)
+    assert invalid.any()
+    assert np.all(map_x[invalid] == -1.0)
+    assert np.all(map_y[invalid] == -1.0)
 
 
 def test_mosaic_tiff_writer_consumes_rgba_blocks_without_vstack(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

@@ -25,7 +25,7 @@ from .mosaic.export.remap_builder import (
     source_pixels_from_icrs_vectors as _source_pixels_from_icrs_vectors,
 )
 from .mosaic.export.remap_repair import (
-    MOSAIC_FORWARD_REMAP_LOW_WEIGHT_THRESHOLD,
+    RemapRepairMode,
     finalize_forward_inverse_map,
 )
 from .mosaic.export.target_transform import (
@@ -362,7 +362,7 @@ def mosaic_reprojection_blocks(
     target_icrs_to_pixel_payload: dict[str, object] | None = None,
     target_model: object | None = None,
     map_tile_size_px: int = 4,
-    exact_remap_repair: bool = False,
+    repair_mode: RemapRepairMode = "smart",
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
 ) -> Iterator[np.ndarray]:
     """逐块生成与源图位深一致的 RGBA 像素。"""
@@ -441,7 +441,7 @@ def mosaic_reprojection_blocks(
         target_model=target_model,
         geometry=geometry,
         map_tile_size_px=map_tile_size_px,
-        exact_remap_repair=exact_remap_repair,
+        repair_mode=repair_mode,
         progress_callback=progress_callback,
         export_progress_callback=export_progress_callback,
         source_pixel_regions=normalized_regions,
@@ -473,7 +473,7 @@ def _build_mosaic_forward_remap_from_source_to_target(
     target_model: object | None,
     geometry: MosaicExportGeometry,
     map_tile_size_px: int,
-    exact_remap_repair: bool,
+    repair_mode: RemapRepairMode,
     progress_callback: Callable[[int], None] | None = None,
     export_progress_callback: MosaicExportProgressCallback | None = None,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
@@ -568,7 +568,7 @@ def _build_mosaic_forward_remap_from_source_to_target(
         target_icrs_to_pixel_payload=target_icrs_to_pixel_payload,
         target_model=target_model,
         geometry=geometry,
-        exact_remap_repair=exact_remap_repair,
+        repair_mode=repair_mode,
         export_progress_callback=export_progress_callback,
     )
     if source_pixel_regions is not None:
@@ -584,7 +584,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
     target_model: object | None,
     geometry: MosaicExportGeometry,
     map_tile_size_px: int,
-    exact_remap_repair: bool,
+    repair_mode: RemapRepairMode,
     progress_callback: Callable[[int], None] | None = None,
     export_progress_callback: MosaicExportProgressCallback | None = None,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
@@ -599,7 +599,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
         target_model=target_model,
         geometry=geometry,
         map_tile_size_px=map_tile_size_px,
-        exact_remap_repair=exact_remap_repair,
+        repair_mode=repair_mode,
         progress_callback=progress_callback,
         export_progress_callback=export_progress_callback,
         source_pixel_regions=source_pixel_regions,
@@ -768,7 +768,7 @@ def _finalize_forward_inverse_map(
     target_icrs_to_pixel_payload: dict[str, object] | None,
     target_model: object | None = None,
     geometry: MosaicExportGeometry | None = None,
-    exact_remap_repair: bool,
+    repair_mode: RemapRepairMode,
     export_progress_callback: MosaicExportProgressCallback | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """兼容旧入口，空洞处理和快速修补已迁入 remap_repair。"""
@@ -784,7 +784,7 @@ def _finalize_forward_inverse_map(
             geometry=geometry,
             progress_callback=lambda value, maximum: _emit_export_progress(
                 export_progress_callback,
-                "正在精确修复亮星小黑点...",
+                "正在精确修复重投影空洞和低权重像素...",
                 value,
                 maximum,
             ),
@@ -795,7 +795,7 @@ def _finalize_forward_inverse_map(
         accum_y,
         weights,
         tile_size,
-        exact_remap_repair=exact_remap_repair,
+        repair_mode=repair_mode,
         exact_repair=exact_repair,
         fast_progress_callback=lambda value, maximum: _emit_export_progress(
             export_progress_callback,
@@ -1245,7 +1245,7 @@ def write_mosaic_reprojection_tiff(
     target_icrs_to_pixel_payload: dict[str, object] | None = None,
     target_model: object | None = None,
     map_tile_size_px: int = 4,
-    exact_remap_repair: bool = False,
+    repair_mode: RemapRepairMode = "smart",
     tiff_lzw_compression: bool = True,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
 ) -> None:
@@ -1294,7 +1294,7 @@ def write_mosaic_reprojection_tiff(
         target_icrs_to_pixel_payload=target_icrs_to_pixel_payload,
         target_model=target_model,
         map_tile_size_px=map_tile_size_px,
-        exact_remap_repair=exact_remap_repair,
+        repair_mode=repair_mode,
         source_pixel_regions=source_pixel_regions,
     )
 
