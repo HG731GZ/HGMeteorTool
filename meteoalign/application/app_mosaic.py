@@ -47,6 +47,7 @@ from ..mosaic.grid_service import (
 )
 from ..mosaic_export import (
     MOSAIC_EXPORT_TIFF_FILTER,
+    MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     load_mosaic_export_source_image,
     mosaic_export_available,
     mosaic_export_block_rows,
@@ -785,6 +786,15 @@ class MosaicProjectionMixin:
             return REMAP_REPAIR_MODES[index]
         return "smart"
 
+    def _mosaic_source_keep_fraction(self) -> float:
+        if not hasattr(self.ui, "doubleSpinBoxMosaicSourceKeepPercent"):
+            return MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION
+        try:
+            value = float(self.ui.doubleSpinBoxMosaicSourceKeepPercent.value()) / 100.0
+        except (TypeError, ValueError):
+            return MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION
+        return max(0.5, min(1.0, value))
+
     def _set_mosaic_output_resolution(
         self,
         width_px: int,
@@ -1191,12 +1201,14 @@ class MosaicProjectionMixin:
         if output_path.suffix.lower() not in (".tif", ".tiff"):
             output_path = output_path.with_suffix(".tif")
         compression_text = "LZW 压缩" if self._mosaic_tiff_lzw_compression_enabled() else "无压缩"
+        source_keep_percent = self._mosaic_source_keep_fraction() * 100.0
         if QMessageBox.question(
             self,
             "确认导出重投影图",
             (
                 f"导出文件：\n{output_path}\n\n"
                 f"尺寸：{geometry.output_width_px} x {geometry.output_height_px} px\n"
+                f"源图保留范围：{source_keep_percent:.1f}%\n"
                 f"格式：{compression_text}、与原图同位深（最高 16-bit）的 RGBA TIFF\n"
                 "背景：透明"
             ),
@@ -1266,6 +1278,7 @@ class MosaicProjectionMixin:
                 target_icrs_to_pixel_payload=self._mosaic_target_icrs_to_pixel_payload,
                 map_tile_size_px=self._mosaic_map_tile_size_px(),
                 repair_mode=self._mosaic_remap_repair_mode(),
+                source_keep_fraction=self._mosaic_source_keep_fraction(),
                 tiff_lzw_compression=self._mosaic_tiff_lzw_compression_enabled(),
                 source_pixel_regions=self._mosaic_source_pixel_regions(active_source),
             )

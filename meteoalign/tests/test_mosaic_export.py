@@ -353,6 +353,36 @@ def test_mosaic_render_block_marks_invalid_pixels_transparent() -> None:
     assert np.array_equal(rendered[0, 1], np.asarray([0, 0, 0, 0], dtype=np.uint16))
 
 
+def test_mosaic_render_block_discards_source_edge_and_keeps_center_95_percent() -> None:
+    """源图四周各 2.5% 应透明，避免镜头边缘偏色进入重叠全景。"""
+
+    source_rgb = np.full((80, 100, 3), (1000, 2000, 3000), dtype=np.uint16)
+    # 100x80 对应左右各裁 2px、上下各裁 2px；边界内侧仍应完整保留。
+    map_x = np.asarray([[1.0, 2.0, 50.0, 97.0, 98.0]], dtype=np.float32)
+    map_y = np.asarray([[40.0, 40.0, 1.0, 77.0, 40.0]], dtype=np.float32)
+
+    rendered = _render_mosaic_reprojection_block_from_map(
+        source_rgb=source_rgb,
+        map_x=map_x,
+        map_y=map_y,
+    )
+
+    assert rendered[0, 0, 3] == 0
+    assert rendered[0, 1, 3] == 65535
+    assert rendered[0, 2, 3] == 0
+    assert rendered[0, 3, 3] == 65535
+    assert rendered[0, 4, 3] == 0
+    assert np.all(rendered[rendered[:, :, 3] == 0, :3] == 0)
+
+    untrimmed = _render_mosaic_reprojection_block_from_map(
+        source_rgb=source_rgb,
+        map_x=map_x,
+        map_y=map_y,
+        source_keep_fraction=1.0,
+    )
+    assert np.all(untrimmed[:, :, 3] == 65535)
+
+
 def test_reprojection_region_mask_keeps_only_selected_source_pixels() -> None:
     """流星区域模式应将框外源图采样点变为透明。"""
 

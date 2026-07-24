@@ -34,6 +34,7 @@ from ..image_preview import DEFAULT_PREVIEW_LONG_SIDE_PX, load_image_preview
 from ..mosaic.render_types import MosaicRenderRequest
 from ..mosaic_export import (
     MOSAIC_EXPORT_TIFF_FILTER,
+    MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     load_mosaic_export_source_image,
     mosaic_export_available,
     write_mosaic_reprojection_tiff,
@@ -97,6 +98,7 @@ class MosaicBatchExportTask:
     block_rows: int
     map_tile_size_px: int
     repair_mode: RemapRepairMode
+    source_keep_fraction: float
     tiff_lzw_compression: bool
     source_pixel_regions: tuple[tuple[int, int, int, int], ...] | None
     gradient_solution: PhotometricSolution | None = None
@@ -167,6 +169,7 @@ def _write_mosaic_batch_export_task(
             target_model=None if task.base_model is None else task.base_model.model,
             map_tile_size_px=task.map_tile_size_px,
             repair_mode=task.repair_mode,
+            source_keep_fraction=task.source_keep_fraction,
             tiff_lzw_compression=task.tiff_lzw_compression,
             source_pixel_regions=task.source_pixel_regions,
         )
@@ -450,6 +453,7 @@ class MosaicBatchMixin:
             "checkBoxMosaicBatchMeteorOnly",
             "doubleSpinBoxMosaicBatchMapTileSize",
             "comboBoxMosaicBatchRemapRepairMode",
+            "doubleSpinBoxMosaicBatchSourceKeepPercent",
         ):
             if hasattr(self.ui, control_name):
                 getattr(self.ui, control_name).setEnabled(not batch_active)
@@ -1102,6 +1106,7 @@ class MosaicBatchMixin:
                 f"{meteor_only_text}{gradient_text}\n"
                 f"输出目录：\n{output_dir}\n\n"
                 f"尺寸：{geometry.output_width_px} x {geometry.output_height_px} px\n"
+                f"源图保留范围：{self._mosaic_batch_source_keep_fraction() * 100.0:.1f}%\n"
                 f"格式：{MOSAIC_EXPORT_TIFF_FILTER}"
             ),
             QMessageBox.Yes | QMessageBox.No,
@@ -1121,6 +1126,7 @@ class MosaicBatchMixin:
         block_rows = self._mosaic_export_block_rows()
         map_tile_size_px = self._mosaic_batch_map_tile_size_px()
         repair_mode = self._mosaic_batch_remap_repair_mode()
+        source_keep_fraction = self._mosaic_batch_source_keep_fraction()
         tiff_lzw_compression = self._mosaic_tiff_lzw_compression_enabled()
         gradient_solution = (
             getattr(self, "_mosaic_batch_gradient_solution", None)
@@ -1149,6 +1155,7 @@ class MosaicBatchMixin:
                     block_rows=block_rows,
                     map_tile_size_px=map_tile_size_px,
                     repair_mode=repair_mode,
+                    source_keep_fraction=source_keep_fraction,
                     tiff_lzw_compression=tiff_lzw_compression,
                     source_pixel_regions=self._mosaic_batch_item_source_regions(item),
                     gradient_solution=gradient_solution,
@@ -1326,6 +1333,18 @@ class MosaicBatchMixin:
             if mode in REMAP_REPAIR_MODES:
                 return mode
         return "smart"
+
+    def _mosaic_batch_source_keep_fraction(self) -> float:
+        if hasattr(self.ui, "doubleSpinBoxMosaicBatchSourceKeepPercent"):
+            try:
+                value = float(self.ui.doubleSpinBoxMosaicBatchSourceKeepPercent.value()) / 100.0
+                return max(0.5, min(1.0, value))
+            except (TypeError, ValueError):
+                pass
+        method = getattr(self, "_mosaic_source_keep_fraction", None)
+        if callable(method):
+            return max(0.5, min(1.0, float(method())))
+        return MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION
 
     def _mosaic_batch_config_map_tile_size_px(self) -> int:
         configured = getattr(self.ui_config, "mosaic_map_tile_size_px", 4)

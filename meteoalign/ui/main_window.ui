@@ -3186,6 +3186,42 @@
                 </layout>
                </item>
                <item>
+                <layout class="QHBoxLayout" name="horizontalLayoutMosaicSourceKeepPercent">
+                 <item>
+                  <widget class="QLabel" name="labelMosaicSourceKeepPercent">
+                   <property name="text">
+                    <string>源图保留范围</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QDoubleSpinBox" name="doubleSpinBoxMosaicSourceKeepPercent">
+                   <property name="toolTip">
+                    <string>只将源图中央指定比例写入最终投影；降低数值可裁掉更多容易偏色的镜头边缘。</string>
+                   </property>
+                   <property name="decimals">
+                    <number>1</number>
+                   </property>
+                   <property name="minimum">
+                    <double>50.000000000000000</double>
+                   </property>
+                   <property name="maximum">
+                    <double>100.000000000000000</double>
+                   </property>
+                   <property name="singleStep">
+                    <double>1.000000000000000</double>
+                   </property>
+                   <property name="suffix">
+                    <string> %</string>
+                   </property>
+                   <property name="value">
+                    <double>95.000000000000000</double>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
                 <widget class="QPushButton" name="pushButtonExportMosaicProjectedImage">
                  <property name="text">
                   <string>导出重投影图</string>
@@ -3616,6 +3652,42 @@
                    </property>
                   </widget>
                  </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayoutMosaicBatchSourceKeepPercent">
+                <item>
+                 <widget class="QLabel" name="labelMosaicBatchSourceKeepPercent">
+                  <property name="text">
+                   <string>源图保留范围</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QDoubleSpinBox" name="doubleSpinBoxMosaicBatchSourceKeepPercent">
+                  <property name="toolTip">
+                   <string>只将源图中央指定比例写入最终投影；降低数值可裁掉更多容易偏色的镜头边缘。</string>
+                  </property>
+                  <property name="decimals">
+                   <number>1</number>
+                  </property>
+                  <property name="minimum">
+                   <double>50.000000000000000</double>
+                  </property>
+                  <property name="maximum">
+                   <double>100.000000000000000</double>
+                  </property>
+                  <property name="singleStep">
+                   <double>1.000000000000000</double>
+                  </property>
+                  <property name="suffix">
+                   <string> %</string>
+                  </property>
+                  <property name="value">
+                   <double>95.000000000000000</double>
+                  </property>
+                 </widget>
+                </item>
                </layout>
               </item>
               <item>

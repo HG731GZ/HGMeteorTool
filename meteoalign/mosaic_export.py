@@ -72,6 +72,7 @@ MOSAIC_EXPORT_DEFAULT_BLOCK_ROWS = 1024
 MOSAIC_FORWARD_REMAP_EXACT_FILL_BATCH_PIXELS = 1_000_000
 MOSAIC_FORWARD_REMAP_MAX_TILE_TARGET_SPAN_PER_SOURCE_PX = 8.0
 MOSAIC_FORWARD_REMAP_MIN_MAX_TILE_TARGET_SPAN_PX = 32.0
+MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION = 0.95
 MosaicExportProgressCallback = Callable[[str, int, int], None]
 SourcePixelRegion = tuple[int, int, int, int]
 
@@ -365,6 +366,7 @@ def mosaic_reprojection_blocks(
     target_model: object | None = None,
     map_tile_size_px: int = 4,
     repair_mode: RemapRepairMode = "smart",
+    source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
 ) -> Iterator[np.ndarray]:
     """逐块生成与源图位深一致的 RGBA 像素。"""
@@ -421,6 +423,7 @@ def mosaic_reprojection_blocks(
                 source_rgb=source,
                 map_x=map_x,
                 map_y=map_y,
+                source_keep_fraction=source_keep_fraction,
             )
             completed_rows += int(map_x.shape[0])
             if progress_callback is not None:
@@ -456,6 +459,7 @@ def mosaic_reprojection_blocks(
             source_rgb=source,
             map_x=map_x[row_start:row_end],
             map_y=map_y[row_start:row_end],
+            source_keep_fraction=source_keep_fraction,
         )
         _emit_export_progress(
             export_progress_callback,
@@ -587,6 +591,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
     geometry: MosaicExportGeometry,
     map_tile_size_px: int,
     repair_mode: RemapRepairMode,
+    source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     progress_callback: Callable[[int], None] | None = None,
     export_progress_callback: MosaicExportProgressCallback | None = None,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
@@ -611,6 +616,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
         source_rgb=source_rgb,
         map_x=map_x,
         map_y=map_y,
+        source_keep_fraction=source_keep_fraction,
     )
 
 
@@ -1266,6 +1272,7 @@ def _render_mosaic_reprojection_block_from_map(
     source_rgb: np.ndarray,
     map_x: np.ndarray,
     map_y: np.ndarray,
+    source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
 ) -> np.ndarray:
     remapped = cv2.remap(
         source_rgb,
@@ -1278,13 +1285,18 @@ def _render_mosaic_reprojection_block_from_map(
     if remapped.ndim == 2:
         remapped = np.repeat(remapped[:, :, None], 3, axis=2)
     source_height, source_width = source_rgb.shape[:2]
+    source_left, source_top, source_right, source_bottom = _source_interior_sampling_bounds(
+        source_width,
+        source_height,
+        keep_fraction=source_keep_fraction,
+    )
     valid_alpha = (
         np.isfinite(map_x)
         & np.isfinite(map_y)
-        & (map_x >= -0.5)
-        & (map_x <= float(source_width) - 0.5)
-        & (map_y >= -0.5)
-        & (map_y <= float(source_height) - 0.5)
+        & (map_x >= source_left)
+        & (map_x <= source_right)
+        & (map_y >= source_top)
+        & (map_y <= source_bottom)
     )
     output_dtype = source_rgb.dtype
     alpha_max = np.iinfo(output_dtype).max
@@ -1293,6 +1305,28 @@ def _render_mosaic_reprojection_block_from_map(
     remapped[~valid_alpha] = 0
     rgba = np.dstack((remapped, alpha))
     return np.ascontiguousarray(rgba, dtype=output_dtype)
+
+
+def _source_interior_sampling_bounds(
+    source_width_px: int,
+    source_height_px: int,
+    *,
+    keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
+) -> tuple[float, float, float, float]:
+    """返回参与最终合成的源图中央区域，剔除容易偏色的四周边缘。"""
+
+    width = max(1, int(source_width_px))
+    height = max(1, int(source_height_px))
+    safe_keep_fraction = max(0.0, min(1.0, float(keep_fraction)))
+    trim_fraction_per_side = (1.0 - safe_keep_fraction) * 0.5
+    inset_x = int(np.floor(width * trim_fraction_per_side))
+    inset_y = int(np.floor(height * trim_fraction_per_side))
+    return (
+        float(inset_x),
+        float(inset_y),
+        float(width - 1 - inset_x),
+        float(height - 1 - inset_y),
+    )
 
 
 def write_mosaic_reprojection_tiff(
@@ -1312,6 +1346,7 @@ def write_mosaic_reprojection_tiff(
     target_model: object | None = None,
     map_tile_size_px: int = 4,
     repair_mode: RemapRepairMode = "smart",
+    source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     tiff_lzw_compression: bool = True,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
 ) -> None:
@@ -1361,6 +1396,7 @@ def write_mosaic_reprojection_tiff(
         target_model=target_model,
         map_tile_size_px=map_tile_size_px,
         repair_mode=repair_mode,
+        source_keep_fraction=source_keep_fraction,
         source_pixel_regions=source_pixel_regions,
     )
 

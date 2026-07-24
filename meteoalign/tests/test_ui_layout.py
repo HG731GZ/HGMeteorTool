@@ -77,6 +77,26 @@ def test_mosaic_repair_mode_controls_default_to_smart() -> None:
     window.close()
 
 
+def test_mosaic_source_keep_controls_default_to_95_percent() -> None:
+    """单张与批处理应允许调整中央保留比例，并默认保留 95%。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    for spin_box in (
+        ui.doubleSpinBoxMosaicSourceKeepPercent,
+        ui.doubleSpinBoxMosaicBatchSourceKeepPercent,
+    ):
+        assert spin_box.minimum() == 50.0
+        assert spin_box.maximum() == 100.0
+        assert spin_box.value() == 95.0
+        assert spin_box.suffix() == " %"
+
+    window.close()
+
+
 def test_preview_navigation_buttons_use_arrow_key_shortcuts() -> None:
     """右侧预览获得焦点时应使用左右方向键触发对应按钮。"""
 
