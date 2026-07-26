@@ -55,6 +55,11 @@ from ..mosaic_export import (
 )
 from ..mosaic.export.geometry import mosaic_export_cropped_geometry
 from ..mosaic.export.remap_repair import REMAP_REPAIR_MODES, RemapRepairMode
+from ..mosaic.export.resampling import (
+    MOSAIC_DEFAULT_RESAMPLING_METHOD,
+    MOSAIC_RESAMPLING_METHODS,
+    MosaicResamplingMethod,
+)
 from ..mosaic.export.target_transform import (
     build_target_icrs_to_pixel_transform_payload,
     target_icrs_to_pixel_transform_payload_matches,
@@ -786,6 +791,14 @@ class MosaicProjectionMixin:
             return REMAP_REPAIR_MODES[index]
         return "smart"
 
+    def _mosaic_resampling_method(self) -> MosaicResamplingMethod:
+        if not hasattr(self.ui, "comboBoxMosaicResamplingMethod"):
+            return MOSAIC_DEFAULT_RESAMPLING_METHOD
+        index = int(self.ui.comboBoxMosaicResamplingMethod.currentIndex())
+        if 0 <= index < len(MOSAIC_RESAMPLING_METHODS):
+            return MOSAIC_RESAMPLING_METHODS[index]
+        return MOSAIC_DEFAULT_RESAMPLING_METHOD
+
     def _mosaic_source_keep_fraction(self) -> float:
         if not hasattr(self.ui, "doubleSpinBoxMosaicSourceKeepPercent"):
             return MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION
@@ -1278,6 +1291,7 @@ class MosaicProjectionMixin:
                 target_icrs_to_pixel_payload=self._mosaic_target_icrs_to_pixel_payload,
                 map_tile_size_px=self._mosaic_map_tile_size_px(),
                 repair_mode=self._mosaic_remap_repair_mode(),
+                resampling_method=self._mosaic_resampling_method(),
                 source_keep_fraction=self._mosaic_source_keep_fraction(),
                 tiff_lzw_compression=self._mosaic_tiff_lzw_compression_enabled(),
                 source_pixel_regions=self._mosaic_source_pixel_regions(active_source),

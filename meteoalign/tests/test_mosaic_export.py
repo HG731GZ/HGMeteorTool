@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import numpy as np
+import pytest
 import tifffile
 
 import meteoalign.mosaic_export as mosaic_export_module
@@ -351,6 +352,55 @@ def test_mosaic_render_block_marks_invalid_pixels_transparent() -> None:
     assert rendered.shape == (1, 2, 4)
     assert np.array_equal(rendered[0, 0], np.asarray([1000, 2000, 3000, 65535], dtype=np.uint16))
     assert np.array_equal(rendered[0, 1], np.asarray([0, 0, 0, 0], dtype=np.uint16))
+
+
+def test_mosaic_render_block_supports_bicubic_and_true_lanczos3() -> None:
+    """高质量插值应贯通渲染入口，并在亚像素位置区别于双线性。"""
+
+    source_rgb = np.zeros((9, 9, 3), dtype=np.uint16)
+    source_rgb[4, 4] = (50000, 40000, 30000)
+    map_x = np.asarray([[4.25, 4.0]], dtype=np.float32)
+    map_y = np.asarray([[4.0, 4.0]], dtype=np.float32)
+
+    bilinear = _render_mosaic_reprojection_block_from_map(
+        source_rgb=source_rgb,
+        map_x=map_x,
+        map_y=map_y,
+        resampling_method="bilinear",
+        source_keep_fraction=1.0,
+    )
+    bicubic = _render_mosaic_reprojection_block_from_map(
+        source_rgb=source_rgb,
+        map_x=map_x,
+        map_y=map_y,
+        resampling_method="bicubic",
+        source_keep_fraction=1.0,
+    )
+    lanczos3 = _render_mosaic_reprojection_block_from_map(
+        source_rgb=source_rgb,
+        map_x=map_x,
+        map_y=map_y,
+        resampling_method="lanczos3",
+        source_keep_fraction=1.0,
+    )
+
+    assert int(bilinear[0, 0, 0]) < int(bicubic[0, 0, 0]) < int(lanczos3[0, 0, 0])
+    for rendered in (bilinear, bicubic, lanczos3):
+        assert np.array_equal(
+            rendered[0, 1],
+            np.asarray([50000, 40000, 30000, 65535], dtype=np.uint16),
+        )
+
+
+def test_mosaic_render_block_rejects_unknown_resampling_method() -> None:
+    with pytest.raises(ValueError, match="不支持的重投影插值方式"):
+        _render_mosaic_reprojection_block_from_map(
+            source_rgb=np.zeros((2, 2, 3), dtype=np.uint8),
+            map_x=np.zeros((1, 1), dtype=np.float32),
+            map_y=np.zeros((1, 1), dtype=np.float32),
+            resampling_method="nearest",  # type: ignore[arg-type]
+            source_keep_fraction=1.0,
+        )
 
 
 def test_mosaic_render_block_discards_source_edge_and_keeps_center_95_percent() -> None:

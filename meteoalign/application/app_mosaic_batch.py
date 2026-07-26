@@ -41,6 +41,11 @@ from ..mosaic_export import (
 )
 from ..mosaic.export.geometry import MosaicExportGeometry
 from ..mosaic.export.remap_repair import REMAP_REPAIR_MODES, RemapRepairMode
+from ..mosaic.export.resampling import (
+    MOSAIC_DEFAULT_RESAMPLING_METHOD,
+    MOSAIC_RESAMPLING_METHODS,
+    MosaicResamplingMethod,
+)
 from ..mosaic.export.target_transform import target_icrs_to_pixel_transform_payload_matches
 from ..mosaic.framing import MOSAIC_FRAMING_SCHEMA
 from ..mosaic.model_io import MosaicSourceModel, _load_mosaic_source_model
@@ -105,6 +110,7 @@ class MosaicBatchExportTask:
     # None means that the image did not participate in the solve. It can still
     # use the shared lens/camera field, but has no fitted per-frame terms.
     gradient_frame_index: int | None = None
+    resampling_method: MosaicResamplingMethod = MOSAIC_DEFAULT_RESAMPLING_METHOD
 
 
 def _write_mosaic_batch_export_task(
@@ -169,6 +175,7 @@ def _write_mosaic_batch_export_task(
             target_model=None if task.base_model is None else task.base_model.model,
             map_tile_size_px=task.map_tile_size_px,
             repair_mode=task.repair_mode,
+            resampling_method=task.resampling_method,
             source_keep_fraction=task.source_keep_fraction,
             tiff_lzw_compression=task.tiff_lzw_compression,
             source_pixel_regions=task.source_pixel_regions,
@@ -453,6 +460,7 @@ class MosaicBatchMixin:
             "checkBoxMosaicBatchMeteorOnly",
             "doubleSpinBoxMosaicBatchMapTileSize",
             "comboBoxMosaicBatchRemapRepairMode",
+            "comboBoxMosaicBatchResamplingMethod",
             "doubleSpinBoxMosaicBatchSourceKeepPercent",
         ):
             if hasattr(self.ui, control_name):
@@ -1126,6 +1134,7 @@ class MosaicBatchMixin:
         block_rows = self._mosaic_export_block_rows()
         map_tile_size_px = self._mosaic_batch_map_tile_size_px()
         repair_mode = self._mosaic_batch_remap_repair_mode()
+        resampling_method = self._mosaic_batch_resampling_method()
         source_keep_fraction = self._mosaic_batch_source_keep_fraction()
         tiff_lzw_compression = self._mosaic_tiff_lzw_compression_enabled()
         gradient_solution = (
@@ -1155,6 +1164,7 @@ class MosaicBatchMixin:
                     block_rows=block_rows,
                     map_tile_size_px=map_tile_size_px,
                     repair_mode=repair_mode,
+                    resampling_method=resampling_method,
                     source_keep_fraction=source_keep_fraction,
                     tiff_lzw_compression=tiff_lzw_compression,
                     source_pixel_regions=self._mosaic_batch_item_source_regions(item),
@@ -1333,6 +1343,18 @@ class MosaicBatchMixin:
             if mode in REMAP_REPAIR_MODES:
                 return mode
         return "smart"
+
+    def _mosaic_batch_resampling_method(self) -> MosaicResamplingMethod:
+        if hasattr(self.ui, "comboBoxMosaicBatchResamplingMethod"):
+            index = int(self.ui.comboBoxMosaicBatchResamplingMethod.currentIndex())
+            if 0 <= index < len(MOSAIC_RESAMPLING_METHODS):
+                return MOSAIC_RESAMPLING_METHODS[index]
+        method = getattr(self, "_mosaic_resampling_method", None)
+        if callable(method):
+            value = method()
+            if value in MOSAIC_RESAMPLING_METHODS:
+                return value
+        return MOSAIC_DEFAULT_RESAMPLING_METHOD
 
     def _mosaic_batch_source_keep_fraction(self) -> float:
         if hasattr(self.ui, "doubleSpinBoxMosaicBatchSourceKeepPercent"):

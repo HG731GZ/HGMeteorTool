@@ -3186,6 +3186,39 @@
                 </layout>
                </item>
                <item>
+                <layout class="QHBoxLayout" name="horizontalLayoutMosaicResamplingMethod">
+                 <item>
+                  <widget class="QLabel" name="labelMosaicResamplingMethod">
+                   <property name="text">
+                    <string>插值方式</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <widget class="QComboBox" name="comboBoxMosaicResamplingMethod">
+                   <property name="toolTip">
+                    <string>双线性速度最快；双三次与 Lanczos3 能保留更多细节，但导出速度会更慢。</string>
+                   </property>
+                   <item>
+                    <property name="text">
+                     <string>双线性（默认）</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>双三次</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>Lanczos3</string>
+                    </property>
+                   </item>
+                  </widget>
+                 </item>
+                </layout>
+               </item>
+               <item>
                 <layout class="QHBoxLayout" name="horizontalLayoutMosaicSourceKeepPercent">
                  <item>
                   <widget class="QLabel" name="labelMosaicSourceKeepPercent">
@@ -3652,6 +3685,39 @@
                    </property>
                   </widget>
                  </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayoutMosaicBatchResamplingMethod">
+                <item>
+                 <widget class="QLabel" name="labelMosaicBatchResamplingMethod">
+                  <property name="text">
+                   <string>插值方式</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="comboBoxMosaicBatchResamplingMethod">
+                  <property name="toolTip">
+                   <string>双线性速度最快；双三次与 Lanczos3 能保留更多细节，但导出速度会更慢。</string>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>双线性（默认）</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>双三次</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Lanczos3</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
                </layout>
               </item>
               <item>

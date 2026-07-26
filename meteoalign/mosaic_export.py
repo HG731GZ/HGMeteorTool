@@ -28,6 +28,11 @@ from .mosaic.export.remap_repair import (
     RemapRepairMode,
     finalize_forward_inverse_map,
 )
+from .mosaic.export.resampling import (
+    MOSAIC_DEFAULT_RESAMPLING_METHOD,
+    MosaicResamplingMethod,
+    remap_rgb_image,
+)
 from .mosaic.export.target_transform import (
     MOSAIC_TARGET_ICRS_TO_PIXEL_VERSION,
     _icrs_camera_basis_from_view,
@@ -366,6 +371,7 @@ def mosaic_reprojection_blocks(
     target_model: object | None = None,
     map_tile_size_px: int = 4,
     repair_mode: RemapRepairMode = "smart",
+    resampling_method: MosaicResamplingMethod = MOSAIC_DEFAULT_RESAMPLING_METHOD,
     source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
 ) -> Iterator[np.ndarray]:
@@ -423,6 +429,7 @@ def mosaic_reprojection_blocks(
                 source_rgb=source,
                 map_x=map_x,
                 map_y=map_y,
+                resampling_method=resampling_method,
                 source_keep_fraction=source_keep_fraction,
             )
             completed_rows += int(map_x.shape[0])
@@ -459,6 +466,7 @@ def mosaic_reprojection_blocks(
             source_rgb=source,
             map_x=map_x[row_start:row_end],
             map_y=map_y[row_start:row_end],
+            resampling_method=resampling_method,
             source_keep_fraction=source_keep_fraction,
         )
         _emit_export_progress(
@@ -591,6 +599,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
     geometry: MosaicExportGeometry,
     map_tile_size_px: int,
     repair_mode: RemapRepairMode,
+    resampling_method: MosaicResamplingMethod = MOSAIC_DEFAULT_RESAMPLING_METHOD,
     source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     progress_callback: Callable[[int], None] | None = None,
     export_progress_callback: MosaicExportProgressCallback | None = None,
@@ -616,6 +625,7 @@ def _render_mosaic_forward_remap_from_source_to_target(
         source_rgb=source_rgb,
         map_x=map_x,
         map_y=map_y,
+        resampling_method=resampling_method,
         source_keep_fraction=source_keep_fraction,
     )
 
@@ -1272,15 +1282,14 @@ def _render_mosaic_reprojection_block_from_map(
     source_rgb: np.ndarray,
     map_x: np.ndarray,
     map_y: np.ndarray,
+    resampling_method: MosaicResamplingMethod = MOSAIC_DEFAULT_RESAMPLING_METHOD,
     source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
 ) -> np.ndarray:
-    remapped = cv2.remap(
+    remapped = remap_rgb_image(
         source_rgb,
         map_x,
         map_y,
-        interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=(0, 0, 0),
+        method=resampling_method,
     )
     if remapped.ndim == 2:
         remapped = np.repeat(remapped[:, :, None], 3, axis=2)
@@ -1346,6 +1355,7 @@ def write_mosaic_reprojection_tiff(
     target_model: object | None = None,
     map_tile_size_px: int = 4,
     repair_mode: RemapRepairMode = "smart",
+    resampling_method: MosaicResamplingMethod = MOSAIC_DEFAULT_RESAMPLING_METHOD,
     source_keep_fraction: float = MOSAIC_REPROJECTION_SOURCE_KEEP_FRACTION,
     tiff_lzw_compression: bool = True,
     source_pixel_regions: tuple[SourcePixelRegion, ...] | None = None,
@@ -1396,6 +1406,7 @@ def write_mosaic_reprojection_tiff(
         target_model=target_model,
         map_tile_size_px=map_tile_size_px,
         repair_mode=repair_mode,
+        resampling_method=resampling_method,
         source_keep_fraction=source_keep_fraction,
         source_pixel_regions=source_pixel_regions,
     )

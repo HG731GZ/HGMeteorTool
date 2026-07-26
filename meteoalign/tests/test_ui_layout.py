@@ -77,6 +77,28 @@ def test_mosaic_repair_mode_controls_default_to_smart() -> None:
     window.close()
 
 
+def test_mosaic_resampling_controls_offer_high_quality_methods() -> None:
+    """单张与批处理导出都应提供三种插值方式，并保持双线性兼容默认值。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    for combo in (
+        ui.comboBoxMosaicResamplingMethod,
+        ui.comboBoxMosaicBatchResamplingMethod,
+    ):
+        assert [combo.itemText(index) for index in range(combo.count())] == [
+            "双线性（默认）",
+            "双三次",
+            "Lanczos3",
+        ]
+        assert combo.currentIndex() == 0
+
+    window.close()
+
+
 def test_mosaic_source_keep_controls_default_to_95_percent() -> None:
     """单张与批处理应允许调整中央保留比例，并默认保留 95%。"""
 
