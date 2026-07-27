@@ -139,6 +139,33 @@ def test_mosaic_source_keep_controls_default_to_95_percent() -> None:
     window.close()
 
 
+def test_mosaic_image_size_controls_default_to_full_optimal_size_before_crop() -> None:
+    """图片尺寸默认采用优化尺寸 100%，并在布局中位于裁剪之前。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    assert [
+        ui.comboBoxMosaicImageSizeMode.itemText(index)
+        for index in range(ui.comboBoxMosaicImageSizeMode.count())
+    ] == ["优化尺寸百分比", "手动指定像素"]
+    assert ui.comboBoxMosaicImageSizeMode.currentIndex() == 0
+    assert ui.doubleSpinBoxMosaicImageSizePercent.value() == 100.0
+    assert ui.checkBoxMosaicLockAspectRatio.isChecked()
+    assert not ui.spinBoxMosaicImageWidth.isEnabled()
+    assert not ui.spinBoxMosaicImageHeight.isEnabled()
+
+    layout = ui.verticalLayoutMosaicFraming
+    image_size_index = layout.indexOf(ui.groupBoxMosaicImageSize)
+    crop_index = layout.indexOf(ui.groupBoxMosaicCrop)
+    assert 0 <= image_size_index < crop_index
+    assert ui.groupBoxMosaicCrop.title() == "裁剪（图片尺寸设定后）"
+
+    window.close()
+
+
 def test_preview_navigation_buttons_use_arrow_key_shortcuts() -> None:
     """右侧预览获得焦点时应使用左右方向键触发对应按钮。"""
 
@@ -219,6 +246,7 @@ FORM_LAYOUTS = (
     "formLayoutMosaicObserver",
     "formLayoutMosaicProjection",
     "formLayoutMosaicOutputSize",
+    "formLayoutMosaicImageSize",
     "formLayoutMosaicCrop",
     "formLayoutMosaicBatchSettings",
 )

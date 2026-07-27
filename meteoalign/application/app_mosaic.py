@@ -78,7 +78,13 @@ from ..mosaic.model_io import (
     _load_mosaic_source_model,
 )
 from ..mosaic.overlay_renderer import load_source_texture
-from ..mosaic.state import MosaicSessionState, MosaicSourceState
+from ..mosaic.state import (
+    MOSAIC_IMAGE_SIZE_MODE_MANUAL,
+    MOSAIC_IMAGE_SIZE_MODE_PERCENT,
+    MOSAIC_IMAGE_SIZE_MODES,
+    MosaicSessionState,
+    MosaicSourceState,
+)
 from ..mosaic.render_coordinator import MosaicRenderCoordinator
 from ..mosaic.render_types import MosaicRenderRequest
 from ..meteor_selection import load_meteor_selection, meteor_json_path
@@ -349,6 +355,7 @@ class MosaicProjectionMixin:
         self._update_mosaic_projection_controls()
         self._update_mosaic_grid_precision_tooltip()
         self._set_mosaic_grid_controls_enabled(False)
+        self._sync_mosaic_image_size_controls_from_state()
         self._update_mosaic_output_labels()
         self._update_mosaic_crop_control_limits()
         self._update_mosaic_model_labels()
@@ -436,6 +443,26 @@ class MosaicProjectionMixin:
             self.ui.doubleSpinBoxMosaicElevation.valueChanged.connect(self._handle_mosaic_observer_changed)
         if hasattr(self.ui, "pushButtonCalculateMosaicResolution"):
             self.ui.pushButtonCalculateMosaicResolution.clicked.connect(self.calculate_mosaic_optimal_resolution)
+        if hasattr(self.ui, "comboBoxMosaicImageSizeMode"):
+            self.ui.comboBoxMosaicImageSizeMode.currentIndexChanged.connect(
+                self._handle_mosaic_image_size_mode_changed
+            )
+        if hasattr(self.ui, "doubleSpinBoxMosaicImageSizePercent"):
+            self.ui.doubleSpinBoxMosaicImageSizePercent.valueChanged.connect(
+                self._handle_mosaic_image_size_percent_changed
+            )
+        if hasattr(self.ui, "spinBoxMosaicImageWidth"):
+            self.ui.spinBoxMosaicImageWidth.valueChanged.connect(
+                self._handle_mosaic_image_width_changed
+            )
+        if hasattr(self.ui, "spinBoxMosaicImageHeight"):
+            self.ui.spinBoxMosaicImageHeight.valueChanged.connect(
+                self._handle_mosaic_image_height_changed
+            )
+        if hasattr(self.ui, "checkBoxMosaicLockAspectRatio"):
+            self.ui.checkBoxMosaicLockAspectRatio.toggled.connect(
+                self._handle_mosaic_lock_aspect_ratio_toggled
+            )
         if hasattr(self.ui, "pushButtonExportMosaicFraming"):
             self.ui.pushButtonExportMosaicFraming.clicked.connect(self.export_mosaic_framing_json)
         if hasattr(self.ui, "pushButtonImportMosaicFraming"):
@@ -817,19 +844,177 @@ class MosaicProjectionMixin:
         height_px: int,
         estimate: MosaicResolutionEstimate | None = None,
     ) -> None:
-        self._mosaic_output_boundary_width_px = max(0, int(round(width_px)))
-        self._mosaic_output_boundary_height_px = max(0, int(round(height_px)))
+        width_px = max(0, int(round(width_px)))
+        height_px = max(0, int(round(height_px)))
+        view_state = self._mosaic_session_state().view
+        view_state.set_output_boundary(width_px, height_px)
+        if (
+            estimate is not None
+            or view_state.optimal_boundary_width_px <= 0
+            or view_state.optimal_boundary_height_px <= 0
+        ):
+            view_state.set_optimal_boundary(width_px, height_px)
         self._mosaic_resolution_estimate = estimate
         self._clear_mosaic_imported_framing()
+        self._sync_mosaic_image_size_controls_from_state()
         self._update_mosaic_output_labels()
         self._update_mosaic_crop_control_limits()
+
+    def _mosaic_optimal_size(self) -> tuple[int, int]:
+        view_state = self._mosaic_session_state().view
+        width_px = max(0, int(view_state.optimal_boundary_width_px))
+        height_px = max(0, int(view_state.optimal_boundary_height_px))
+        estimate = view_state.resolution_estimate
+        if (width_px <= 0 or height_px <= 0) and estimate is not None:
+            width_px = max(0, int(estimate.boundary_width_px))
+            height_px = max(0, int(estimate.boundary_height_px))
+        if width_px <= 0 or height_px <= 0:
+            return self._mosaic_output_size()
+        return width_px, height_px
+
+    def _update_mosaic_image_size_control_state(self) -> None:
+        manual_mode = (
+            self._mosaic_session_state().view.image_size_mode
+            == MOSAIC_IMAGE_SIZE_MODE_MANUAL
+        )
+        controls = {
+            "doubleSpinBoxMosaicImageSizePercent": not manual_mode,
+            "spinBoxMosaicImageWidth": manual_mode,
+            "spinBoxMosaicImageHeight": manual_mode,
+            "checkBoxMosaicLockAspectRatio": manual_mode,
+        }
+        for control_name, enabled in controls.items():
+            if hasattr(self.ui, control_name):
+                getattr(self.ui, control_name).setEnabled(enabled)
+
+    def _sync_mosaic_image_size_controls_from_state(self) -> None:
+        view_state = self._mosaic_session_state().view
+        mode_index = 1 if view_state.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_MANUAL else 0
+        output_width_px, output_height_px = self._mosaic_output_size()
+        values = {
+            "comboBoxMosaicImageSizeMode": mode_index,
+            "doubleSpinBoxMosaicImageSizePercent": float(view_state.image_size_percent),
+            "spinBoxMosaicImageWidth": max(
+                1,
+                int(view_state.manual_width_px if mode_index == 1 else output_width_px),
+            ),
+            "spinBoxMosaicImageHeight": max(
+                1,
+                int(view_state.manual_height_px if mode_index == 1 else output_height_px),
+            ),
+            "checkBoxMosaicLockAspectRatio": bool(view_state.lock_aspect_ratio),
+        }
+        for control_name, value in values.items():
+            if not hasattr(self.ui, control_name):
+                continue
+            control = getattr(self.ui, control_name)
+            was_blocked = control.blockSignals(True)
+            if control_name == "comboBoxMosaicImageSizeMode":
+                control.setCurrentIndex(int(value))
+            elif control_name == "checkBoxMosaicLockAspectRatio":
+                control.setChecked(bool(value))
+            else:
+                control.setValue(value)
+            control.blockSignals(was_blocked)
+        self._update_mosaic_image_size_control_state()
+
+    def _apply_mosaic_image_size_settings(self, *, clear_framing: bool = True) -> None:
+        view_state = self._mosaic_session_state().view
+        optimal_width_px, optimal_height_px = self._mosaic_optimal_size()
+        if view_state.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_MANUAL:
+            width_px = max(0, int(view_state.manual_width_px))
+            height_px = max(0, int(view_state.manual_height_px))
+        else:
+            scale = max(0.01, float(view_state.image_size_percent) / 100.0)
+            width_px = max(1, int(round(optimal_width_px * scale))) if optimal_width_px > 0 else 0
+            height_px = max(1, int(round(optimal_height_px * scale))) if optimal_height_px > 0 else 0
+        view_state.set_output_boundary(width_px, height_px)
+        if clear_framing:
+            self._clear_mosaic_imported_framing()
+        self._sync_mosaic_image_size_controls_from_state()
+        self._update_mosaic_output_labels()
+        self._update_mosaic_crop_control_limits()
+
+    def _set_mosaic_optimal_resolution(self, estimate: MosaicResolutionEstimate) -> None:
+        view_state = self._mosaic_session_state().view
+        view_state.set_optimal_boundary(estimate.boundary_width_px, estimate.boundary_height_px)
+        view_state.resolution_estimate = estimate
+        if view_state.manual_width_px <= 0 or view_state.manual_height_px <= 0:
+            view_state.manual_width_px = int(estimate.boundary_width_px)
+            view_state.manual_height_px = int(estimate.boundary_height_px)
+        if estimate.boundary_height_px > 0 and view_state.locked_aspect_ratio <= 0.0:
+            view_state.locked_aspect_ratio = float(estimate.boundary_width_px) / float(
+                estimate.boundary_height_px
+            )
+        self._apply_mosaic_image_size_settings()
+
+    def _handle_mosaic_image_size_mode_changed(self, index: int) -> None:
+        view_state = self._mosaic_session_state().view
+        new_mode = (
+            MOSAIC_IMAGE_SIZE_MODE_MANUAL
+            if int(index) == 1
+            else MOSAIC_IMAGE_SIZE_MODE_PERCENT
+        )
+        if new_mode == MOSAIC_IMAGE_SIZE_MODE_MANUAL and view_state.image_size_mode != new_mode:
+            width_px, height_px = self._mosaic_output_size()
+            if width_px > 0 and height_px > 0:
+                view_state.manual_width_px = width_px
+                view_state.manual_height_px = height_px
+                view_state.locked_aspect_ratio = float(width_px) / float(height_px)
+        view_state.image_size_mode = new_mode
+        self._apply_mosaic_image_size_settings()
+        self.schedule_mosaic_render(delay_ms=0)
+
+    def _handle_mosaic_image_size_percent_changed(self, value: float) -> None:
+        view_state = self._mosaic_session_state().view
+        view_state.image_size_percent = max(1.0, min(1000.0, float(value)))
+        if view_state.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_PERCENT:
+            self._apply_mosaic_image_size_settings()
+            self.schedule_mosaic_render(delay_ms=0)
+
+    def _handle_mosaic_image_width_changed(self, value: int) -> None:
+        view_state = self._mosaic_session_state().view
+        if view_state.image_size_mode != MOSAIC_IMAGE_SIZE_MODE_MANUAL:
+            return
+        view_state.manual_width_px = max(1, int(value))
+        if view_state.lock_aspect_ratio and view_state.locked_aspect_ratio > 0.0:
+            view_state.manual_height_px = max(
+                1,
+                int(round(view_state.manual_width_px / view_state.locked_aspect_ratio)),
+            )
+        self._apply_mosaic_image_size_settings()
+        self.schedule_mosaic_render(delay_ms=0)
+
+    def _handle_mosaic_image_height_changed(self, value: int) -> None:
+        view_state = self._mosaic_session_state().view
+        if view_state.image_size_mode != MOSAIC_IMAGE_SIZE_MODE_MANUAL:
+            return
+        view_state.manual_height_px = max(1, int(value))
+        if view_state.lock_aspect_ratio and view_state.locked_aspect_ratio > 0.0:
+            view_state.manual_width_px = max(
+                1,
+                int(round(view_state.manual_height_px * view_state.locked_aspect_ratio)),
+            )
+        self._apply_mosaic_image_size_settings()
+        self.schedule_mosaic_render(delay_ms=0)
+
+    def _handle_mosaic_lock_aspect_ratio_toggled(self, checked: bool) -> None:
+        view_state = self._mosaic_session_state().view
+        view_state.lock_aspect_ratio = bool(checked)
+        if checked and view_state.manual_width_px > 0 and view_state.manual_height_px > 0:
+            view_state.locked_aspect_ratio = float(view_state.manual_width_px) / float(
+                view_state.manual_height_px
+            )
+        self._clear_mosaic_imported_framing()
+        self._sync_mosaic_image_size_controls_from_state()
 
     def _update_mosaic_output_labels(self) -> None:
         if not hasattr(self.ui, "labelMosaicOptimalWidth"):
             return
         width_px, height_px = self._mosaic_output_size()
-        self.ui.labelMosaicOptimalWidth.setText(f"{width_px} px" if width_px > 0 else "-")
-        self.ui.labelMosaicOptimalHeight.setText(f"{height_px} px" if height_px > 0 else "-")
+        optimal_width_px, optimal_height_px = self._mosaic_optimal_size()
+        self.ui.labelMosaicOptimalWidth.setText(f"{optimal_width_px} px" if optimal_width_px > 0 else "-")
+        self.ui.labelMosaicOptimalHeight.setText(f"{optimal_height_px} px" if optimal_height_px > 0 else "-")
         if hasattr(self.ui, "labelMosaicResolutionInfo"):
             estimate = getattr(self, "_mosaic_resolution_estimate", None)
             if estimate is None:
@@ -970,7 +1155,7 @@ class MosaicProjectionMixin:
         source_model = self._mosaic_source_model
         if source_model is None:
             raise ValueError("需要先导入源图模型，才能按源图中心角分辨率计算最优输出尺寸。")
-        width, height = self._mosaic_render_size()
+        width, height = self._mosaic_viewport_reference_size()
         return estimate_mosaic_optimal_resolution(
             source_model.model,
             source_image_width_px=source_model.image_width_px,
@@ -992,14 +1177,12 @@ class MosaicProjectionMixin:
         finally:
             QApplication.restoreOverrideCursor()
 
-        self._set_mosaic_output_resolution(
-            estimate.boundary_width_px,
-            estimate.boundary_height_px,
-            estimate,
-        )
+        self._set_mosaic_optimal_resolution(estimate)
         self.schedule_mosaic_render(delay_ms=0)
+        output_width_px, output_height_px = self._mosaic_output_size()
         self.ui.statusbar.showMessage(
-            f"最优输出边界: {estimate.boundary_width_px} x {estimate.boundary_height_px} px"
+            f"优化尺寸: {estimate.boundary_width_px} x {estimate.boundary_height_px} px；"
+            f"图片尺寸: {output_width_px} x {output_height_px} px"
         )
         return True
 
@@ -1040,9 +1223,11 @@ class MosaicProjectionMixin:
         observer = self._mosaic_observer_from_controls()
         if observer is None:
             raise ValueError("取景 JSON 需要有效的拍摄时间和地点。")
-        render_width, render_height = self._mosaic_render_size()
+        render_width, render_height = self._mosaic_viewport_reference_size()
         projection_model = self._mosaic_projection_model()
         crop_payload = self._mosaic_crop_rect_payload()
+        view_state = self._mosaic_session_state().view
+        optimal_width_px, optimal_height_px = self._mosaic_optimal_size()
         payload: dict[str, object] = {
             "schema": MOSAIC_FRAMING_SCHEMA,
             "version": MOSAIC_FRAMING_VERSION,
@@ -1061,6 +1246,18 @@ class MosaicProjectionMixin:
             "output": {
                 "boundary_width_px": int(width_px),
                 "boundary_height_px": int(height_px),
+                "optimal_boundary_width_px": int(optimal_width_px),
+                "optimal_boundary_height_px": int(optimal_height_px),
+                "image_size": {
+                    "mode": str(view_state.image_size_mode),
+                    "percent_of_optimal": float(view_state.image_size_percent),
+                    "width_px": int(width_px),
+                    "height_px": int(height_px),
+                    "manual_width_px": int(view_state.manual_width_px),
+                    "manual_height_px": int(view_state.manual_height_px),
+                    "lock_aspect_ratio": bool(view_state.lock_aspect_ratio),
+                    "locked_aspect_ratio": float(view_state.locked_aspect_ratio),
+                },
                 "pixel_convention": "0-based_pixel_center",
                 "crop": crop_payload,
                 "cropped_width_px": float(crop_payload["width_px"]),
@@ -1110,11 +1307,7 @@ class MosaicProjectionMixin:
         if self._mosaic_source_model is not None:
             try:
                 estimate = self._mosaic_estimate_optimal_resolution()
-                self._set_mosaic_output_resolution(
-                    estimate.boundary_width_px,
-                    estimate.boundary_height_px,
-                    estimate,
-                )
+                self._set_mosaic_optimal_resolution(estimate)
             except Exception as exc:  # noqa: BLE001 - 导出前自动刷新尺寸失败时直接反馈用户。
                 QMessageBox.warning(self, "导出取景失败", f"无法刷新最优分辨率：{exc}")
                 self.ui.statusbar.showMessage(f"导出取景失败: {exc}")
@@ -1446,7 +1639,50 @@ class MosaicProjectionMixin:
         height_px = int(round(self._mosaic_payload_float(output_payload, "boundary_height_px", 0.0)))
         if width_px <= 0 or height_px <= 0:
             raise ValueError("取景 JSON 的输出边界尺寸无效。")
-        self._set_mosaic_output_resolution(width_px, height_px, None)
+        image_size_payload = output_payload.get("image_size")
+        if not isinstance(image_size_payload, dict):
+            image_size_payload = {}
+        view_state = self._mosaic_session_state().view
+        optimal_width_px = int(
+            round(self._mosaic_payload_float(output_payload, "optimal_boundary_width_px", width_px))
+        )
+        optimal_height_px = int(
+            round(self._mosaic_payload_float(output_payload, "optimal_boundary_height_px", height_px))
+        )
+        view_state.set_optimal_boundary(
+            max(1, optimal_width_px),
+            max(1, optimal_height_px),
+        )
+        image_size_mode = str(image_size_payload.get("mode") or MOSAIC_IMAGE_SIZE_MODE_PERCENT)
+        if image_size_mode not in MOSAIC_IMAGE_SIZE_MODES:
+            image_size_mode = MOSAIC_IMAGE_SIZE_MODE_PERCENT
+        view_state.image_size_mode = image_size_mode
+        view_state.image_size_percent = max(
+            1.0,
+            min(
+                1000.0,
+                self._mosaic_payload_float(image_size_payload, "percent_of_optimal", 100.0),
+            ),
+        )
+        view_state.manual_width_px = max(
+            1,
+            int(round(self._mosaic_payload_float(image_size_payload, "manual_width_px", width_px))),
+        )
+        view_state.manual_height_px = max(
+            1,
+            int(round(self._mosaic_payload_float(image_size_payload, "manual_height_px", height_px))),
+        )
+        view_state.lock_aspect_ratio = bool(image_size_payload.get("lock_aspect_ratio", True))
+        default_aspect_ratio = float(view_state.manual_width_px) / float(view_state.manual_height_px)
+        view_state.locked_aspect_ratio = max(
+            0.0,
+            self._mosaic_payload_float(image_size_payload, "locked_aspect_ratio", default_aspect_ratio),
+        )
+        view_state.set_output_boundary(width_px, height_px)
+        view_state.resolution_estimate = None
+        self._sync_mosaic_image_size_controls_from_state()
+        self._update_mosaic_output_labels()
+        self._update_mosaic_crop_control_limits()
         crop_payload = output_payload.get("crop")
         self._set_mosaic_crop_controls(crop_payload if isinstance(crop_payload, dict) else {})
         self._update_mosaic_view_label()
@@ -2031,11 +2267,33 @@ class MosaicProjectionMixin:
             return
         self.mosaic_render_timer.start(requested_delay)
 
-    def _mosaic_render_size(self) -> tuple[int, int]:
+    def _mosaic_viewport_reference_size(self) -> tuple[int, int]:
+        if not hasattr(self.ui, "mosaicProjectionView"):
+            custom_render_size = self.__dict__.get("_mosaic_render_size")
+            if callable(custom_render_size):
+                width, height = custom_render_size()
+                return max(1, int(width)), max(1, int(height))
+            return MOSAIC_RENDER_MIN_SIZE_PX, MOSAIC_RENDER_MIN_SIZE_PX
         size = self.ui.mosaicProjectionView.viewport().size()
         return (
             max(MOSAIC_RENDER_MIN_SIZE_PX, int(size.width())),
             max(MOSAIC_RENDER_MIN_SIZE_PX, int(size.height())),
+        )
+
+    def _mosaic_render_size(self) -> tuple[int, int]:
+        """按最终图片长宽比在预览视口内取最大可用渲染尺寸。"""
+
+        viewport_width, viewport_height = self._mosaic_viewport_reference_size()
+        output_width, output_height = self._mosaic_output_size()
+        if output_width <= 0 or output_height <= 0:
+            return viewport_width, viewport_height
+        scale = min(
+            float(viewport_width) / float(output_width),
+            float(viewport_height) / float(output_height),
+        )
+        return (
+            max(MOSAIC_RENDER_MIN_SIZE_PX, int(round(output_width * scale))),
+            max(MOSAIC_RENDER_MIN_SIZE_PX, int(round(output_height * scale))),
         )
 
     def _mosaic_camera_for_render(self, width: int, height: int) -> CameraSettings:

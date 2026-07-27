@@ -4,7 +4,24 @@ from __future__ import annotations
 
 import numpy as np
 
-from meteoalign.mosaic.state import MosaicSessionState, MosaicSourceState, MosaicViewState
+from meteoalign.mosaic.state import (
+    MOSAIC_IMAGE_SIZE_MODE_PERCENT,
+    MosaicSessionState,
+    MosaicSourceState,
+    MosaicViewState,
+)
+
+
+def test_mosaic_view_state_defaults_to_full_optimal_size_with_locked_ratio() -> None:
+    view = MosaicViewState()
+
+    view.set_optimal_boundary(6000, 4000)
+
+    assert view.optimal_boundary_width_px == 6000
+    assert view.optimal_boundary_height_px == 4000
+    assert view.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_PERCENT
+    assert view.image_size_percent == 100.0
+    assert view.lock_aspect_ratio
 
 
 def test_mosaic_source_state_clears_only_rendered_overlay_cache() -> None:

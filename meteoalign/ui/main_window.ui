@@ -2911,7 +2911,7 @@
                  <item row="0" column="0">
                   <widget class="QLabel" name="labelMosaicOptimalWidthTitle">
                    <property name="text">
-                    <string>边界宽</string>
+                    <string>优化宽</string>
                    </property>
                   </widget>
                  </item>
@@ -2925,7 +2925,7 @@
                  <item row="1" column="0">
                   <widget class="QLabel" name="labelMosaicOptimalHeightTitle">
                    <property name="text">
-                    <string>边界高</string>
+                    <string>优化高</string>
                    </property>
                   </widget>
                  </item>
@@ -2976,7 +2976,135 @@
                 </layout>
                </item>
                <item>
-                <layout class="QFormLayout" name="formLayoutMosaicCrop">
+                <widget class="QGroupBox" name="groupBoxMosaicImageSize">
+                 <property name="title">
+                  <string>图片尺寸设定</string>
+                 </property>
+                 <layout class="QFormLayout" name="formLayoutMosaicImageSize">
+                  <property name="fieldGrowthPolicy">
+                   <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+                  </property>
+                  <property name="labelAlignment">
+                   <set>Qt::AlignLeft|Qt::AlignVCenter</set>
+                  </property>
+                  <item row="0" column="0">
+                   <widget class="QLabel" name="labelMosaicImageSizeMode">
+                    <property name="text">
+                     <string>设定方式</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QComboBox" name="comboBoxMosaicImageSizeMode">
+                    <item>
+                     <property name="text">
+                      <string>优化尺寸百分比</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>手动指定像素</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="labelMosaicImageSizePercent">
+                    <property name="text">
+                     <string>优化尺寸比例</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="1">
+                   <widget class="QDoubleSpinBox" name="doubleSpinBoxMosaicImageSizePercent">
+                    <property name="decimals">
+                     <number>1</number>
+                    </property>
+                    <property name="minimum">
+                     <double>1.000000000000000</double>
+                    </property>
+                    <property name="maximum">
+                     <double>1000.000000000000000</double>
+                    </property>
+                    <property name="singleStep">
+                     <double>5.000000000000000</double>
+                    </property>
+                    <property name="value">
+                     <double>100.000000000000000</double>
+                    </property>
+                    <property name="suffix">
+                     <string> %</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="0">
+                   <widget class="QLabel" name="labelMosaicImageWidth">
+                    <property name="text">
+                     <string>图片宽</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="1">
+                   <widget class="QSpinBox" name="spinBoxMosaicImageWidth">
+                    <property name="enabled">
+                     <bool>false</bool>
+                    </property>
+                    <property name="minimum">
+                     <number>1</number>
+                    </property>
+                    <property name="maximum">
+                     <number>1000000000</number>
+                    </property>
+                    <property name="suffix">
+                     <string> px</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="3" column="0">
+                   <widget class="QLabel" name="labelMosaicImageHeight">
+                    <property name="text">
+                     <string>图片高</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="3" column="1">
+                   <widget class="QSpinBox" name="spinBoxMosaicImageHeight">
+                    <property name="enabled">
+                     <bool>false</bool>
+                    </property>
+                    <property name="minimum">
+                     <number>1</number>
+                    </property>
+                    <property name="maximum">
+                     <number>1000000000</number>
+                    </property>
+                    <property name="suffix">
+                     <string> px</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="4" column="1">
+                   <widget class="QCheckBox" name="checkBoxMosaicLockAspectRatio">
+                    <property name="enabled">
+                     <bool>false</bool>
+                    </property>
+                    <property name="text">
+                     <string>锁定长宽比</string>
+                    </property>
+                    <property name="checked">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="groupBoxMosaicCrop">
+                 <property name="title">
+                  <string>裁剪（图片尺寸设定后）</string>
+                 </property>
+                 <layout class="QFormLayout" name="formLayoutMosaicCrop">
                  <property name="fieldGrowthPolicy">
                   <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
                  </property>
@@ -3087,7 +3215,8 @@
                    </property>
                   </widget>
                  </item>
-                </layout>
+                 </layout>
+                </widget>
                </item>
                <item>
                 <layout class="QHBoxLayout" name="horizontalLayoutMosaicFramingIo">

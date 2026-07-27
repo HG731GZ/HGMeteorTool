@@ -18,6 +18,10 @@ from meteoalign.application.app_mosaic import (
     MosaicSourceItem,
 )
 from meteoalign.mosaic.render_coordinator import MosaicRenderCoordinator
+from meteoalign.mosaic.state import (
+    MOSAIC_IMAGE_SIZE_MODE_MANUAL,
+    MOSAIC_IMAGE_SIZE_MODE_PERCENT,
+)
 from meteoalign.mosaic_framing import MOSAIC_FRAMING_SCHEMA
 from meteoalign.mosaic_common import (
     MOSAIC_PROJECTION_MODELS,
@@ -31,11 +35,18 @@ class _Control:
     def __init__(self, value=0) -> None:  # type: ignore[no-untyped-def]
         self._value = value
         self._blocked = False
+        self._enabled = True
 
     def blockSignals(self, blocked: bool) -> bool:  # noqa: N802 - Qt 控件接口命名
         previous = self._blocked
         self._blocked = bool(blocked)
         return previous
+
+    def setEnabled(self, value: bool) -> None:  # noqa: N802 - Qt 控件接口命名
+        self._enabled = bool(value)
+
+    def isEnabled(self) -> bool:  # noqa: N802 - Qt 控件接口命名
+        return bool(self._enabled)
 
 
 class _ComboBox(_Control):
@@ -567,6 +578,51 @@ def test_mosaic_mixin_stores_business_state_in_session_state() -> None:
     assert "_mosaic_center_az_deg" not in window.__dict__
 
 
+def _mosaic_image_size_window() -> MosaicProjectionMixin:
+    window = MosaicProjectionMixin.__new__(MosaicProjectionMixin)
+    window.ui = SimpleNamespace(
+        comboBoxMosaicImageSizeMode=_ComboBox(0),
+        doubleSpinBoxMosaicImageSizePercent=_SpinBox(100.0, minimum=1.0, maximum=1000.0),
+        spinBoxMosaicImageWidth=_SpinBox(1.0, minimum=1.0, maximum=1_000_000_000.0),
+        spinBoxMosaicImageHeight=_SpinBox(1.0, minimum=1.0, maximum=1_000_000_000.0),
+        checkBoxMosaicLockAspectRatio=_CheckBox(True),
+        doubleSpinBoxMosaicCropTop=_SpinBox(0.0, minimum=0.0, maximum=1_000_000_000.0),
+        doubleSpinBoxMosaicCropBottom=_SpinBox(0.0, minimum=0.0, maximum=1_000_000_000.0),
+        doubleSpinBoxMosaicCropLeft=_SpinBox(0.0, minimum=0.0, maximum=1_000_000_000.0),
+        doubleSpinBoxMosaicCropRight=_SpinBox(0.0, minimum=0.0, maximum=1_000_000_000.0),
+    )
+    window._clear_mosaic_imported_framing = lambda: None  # type: ignore[method-assign]
+    window.schedule_mosaic_render = lambda *args, **kwargs: None  # type: ignore[method-assign]
+    return window
+
+
+def test_mosaic_image_size_percent_and_manual_locked_ratio_apply_before_crop() -> None:
+    window = _mosaic_image_size_window()
+    estimate = SimpleNamespace(boundary_width_px=6000, boundary_height_px=4000)
+
+    window._set_mosaic_optimal_resolution(estimate)  # type: ignore[arg-type]
+
+    assert window.mosaic_state.view.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_PERCENT
+    assert window._mosaic_output_size() == (6000, 4000)
+    assert window.ui.doubleSpinBoxMosaicImageSizePercent.value() == 100.0
+
+    window._handle_mosaic_image_size_percent_changed(50.0)
+    assert window._mosaic_output_size() == (3000, 2000)
+    assert window.ui.doubleSpinBoxMosaicCropRight.maximum() == 3000.0
+
+    window._handle_mosaic_image_size_mode_changed(1)
+    window._handle_mosaic_image_width_changed(4500)
+    assert window.mosaic_state.view.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_MANUAL
+    assert window._mosaic_output_size() == (4500, 3000)
+    assert window.ui.spinBoxMosaicImageHeight.value() == 3000.0
+    assert window.ui.doubleSpinBoxMosaicCropBottom.maximum() == 3000.0
+
+    window.ui.doubleSpinBoxMosaicCropLeft.setValue(100.0)
+    window.ui.doubleSpinBoxMosaicCropRight.setValue(200.0)
+    crop = window._mosaic_crop_rect_payload()
+    assert crop["width_px"] == 4200.0
+
+
 class _MosaicWithReferenceJsonMixin(ReferenceJsonIOMixin, MosaicProjectionMixin):
     pass
 
@@ -576,6 +632,11 @@ def test_mosaic_framing_import_uses_mosaic_payload_parser_despite_mro_collision(
     window.ui = SimpleNamespace(
         comboBoxMosaicProjection=_ComboBox(0),
         doubleSpinBoxMosaicFov=_SpinBox(120.0, minimum=5.0, maximum=360.0),
+        comboBoxMosaicImageSizeMode=_ComboBox(0),
+        doubleSpinBoxMosaicImageSizePercent=_SpinBox(100.0, minimum=1.0, maximum=1000.0),
+        spinBoxMosaicImageWidth=_SpinBox(1.0, minimum=1.0, maximum=1_000_000_000.0),
+        spinBoxMosaicImageHeight=_SpinBox(1.0, minimum=1.0, maximum=1_000_000_000.0),
+        checkBoxMosaicLockAspectRatio=_CheckBox(True),
         doubleSpinBoxMosaicCropTop=_SpinBox(0.0, minimum=0.0, maximum=1_000_000.0),
         doubleSpinBoxMosaicCropBottom=_SpinBox(0.0, minimum=0.0, maximum=1_000_000.0),
         doubleSpinBoxMosaicCropLeft=_SpinBox(0.0, minimum=0.0, maximum=1_000_000.0),
@@ -631,6 +692,31 @@ def test_mosaic_framing_import_uses_mosaic_payload_parser_despite_mro_collision(
     assert window._mosaic_output_size() == (5835, 4540)
     assert window._mosaic_framing_observer.latitude_deg == 25.0
     assert window.ui.doubleSpinBoxMosaicCropTop.value() == 190.0
+    assert window.mosaic_state.view.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_PERCENT
+    assert window.mosaic_state.view.image_size_percent == 100.0
+    assert window.mosaic_state.view.optimal_boundary_width_px == 5835
+
+    payload["output"].update(
+        {
+            "boundary_width_px": 5000,
+            "boundary_height_px": 2500,
+            "optimal_boundary_width_px": 6000,
+            "optimal_boundary_height_px": 4000,
+            "image_size": {
+                "mode": MOSAIC_IMAGE_SIZE_MODE_MANUAL,
+                "percent_of_optimal": 80.0,
+                "manual_width_px": 5000,
+                "manual_height_px": 2500,
+                "lock_aspect_ratio": False,
+                "locked_aspect_ratio": 2.0,
+            },
+        }
+    )
+    MosaicProjectionMixin._apply_mosaic_framing_payload(window, payload)
+    assert window._mosaic_output_size() == (5000, 2500)
+    assert window.mosaic_state.view.image_size_mode == MOSAIC_IMAGE_SIZE_MODE_MANUAL
+    assert window.mosaic_state.view.optimal_boundary_width_px == 6000
+    assert not window.mosaic_state.view.lock_aspect_ratio
 
 
 def test_mosaic_framing_payload_does_not_embed_source_model_or_map() -> None:
@@ -666,6 +752,9 @@ def test_mosaic_framing_payload_does_not_embed_source_model_or_map() -> None:
     assert "source_model" not in payload
     assert "reprojection_map" not in payload
     assert payload["output"]["boundary_width_px"] == 5835
+    assert payload["output"]["optimal_boundary_width_px"] == 5835
+    assert payload["output"]["image_size"]["mode"] == MOSAIC_IMAGE_SIZE_MODE_PERCENT
+    assert payload["output"]["image_size"]["percent_of_optimal"] == 100.0
 
 
 def test_mosaic_imported_framing_ready_requires_matching_target_icrs_to_pixel_transform() -> None:

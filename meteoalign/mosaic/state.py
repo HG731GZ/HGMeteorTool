@@ -15,6 +15,14 @@ if TYPE_CHECKING:
     from ..simulator import ObserverSettings
 
 
+MOSAIC_IMAGE_SIZE_MODE_PERCENT = "percent"
+MOSAIC_IMAGE_SIZE_MODE_MANUAL = "manual"
+MOSAIC_IMAGE_SIZE_MODES = (
+    MOSAIC_IMAGE_SIZE_MODE_PERCENT,
+    MOSAIC_IMAGE_SIZE_MODE_MANUAL,
+)
+
+
 @dataclass
 class MosaicSourceState:
     """一张拼图源图及其可重建缓存。
@@ -50,6 +58,14 @@ class MosaicViewState:
     roll_deg: float = 0.0
     output_boundary_width_px: int = 0
     output_boundary_height_px: int = 0
+    optimal_boundary_width_px: int = 0
+    optimal_boundary_height_px: int = 0
+    image_size_mode: str = MOSAIC_IMAGE_SIZE_MODE_PERCENT
+    image_size_percent: float = 100.0
+    manual_width_px: int = 0
+    manual_height_px: int = 0
+    lock_aspect_ratio: bool = True
+    locked_aspect_ratio: float = 0.0
     resolution_estimate: MosaicResolutionEstimate | None = None
 
     def set_output_boundary(self, width_px: int, height_px: int) -> None:
@@ -57,6 +73,12 @@ class MosaicViewState:
 
         self.output_boundary_width_px = max(0, int(width_px))
         self.output_boundary_height_px = max(0, int(height_px))
+
+    def set_optimal_boundary(self, width_px: int, height_px: int) -> None:
+        """设置由中心角分辨率计算得到的优化尺寸基准。"""
+
+        self.optimal_boundary_width_px = max(0, int(width_px))
+        self.optimal_boundary_height_px = max(0, int(height_px))
 
 
 @dataclass
