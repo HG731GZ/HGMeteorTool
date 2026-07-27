@@ -14,6 +14,7 @@ from meteoalign.alignment import (
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
     _project_unit_vectors_with_known_projection,
     fit_preliminary_sky_alignment,
     fit_sky_alignment,
@@ -31,6 +32,7 @@ KNOWN_PROJECTION_MODELS = (
     SKY_MATCHING_MODEL_RECTILINEAR,
     SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT,
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_CYLINDRICAL_EQUIDISTANT,
 )
@@ -218,6 +220,30 @@ def test_source_model_exports_known_projection_payload() -> None:
     expected_vectors = radec_to_unit_vectors(radec[:, 0], radec[:, 1])
     actual_vectors = radec_to_unit_vectors(restored_radec[:, 0], restored_radec[:, 1])
     assert np.max(np.linalg.norm(actual_vectors - expected_vectors, axis=1)) < 1e-6
+
+
+def test_stereographic_source_model_serializes_and_inverse_round_trips() -> None:
+    """STG 星点匹配结果应可作为源图模型保存、恢复并反投影。"""
+
+    radec, pixels = _projection_fixture(SKY_MATCHING_MODEL_STEREOGRAPHIC)
+    model = fit_source_astrometric_model(
+        radec,
+        pixels,
+        image_size=(1000, 800),
+        matching_model=SKY_MATCHING_MODEL_STEREOGRAPHIC,
+    )
+
+    payload = model.to_json_payload()
+    profile = payload["camera_calibration_profile"]
+    assert profile["base_projection"]["type"] == SKY_MATCHING_MODEL_STEREOGRAPHIC
+    assert profile["base_projection"]["parameters"]["projection_code"] == "STG"
+    assert profile["base_projection"]["parameters"]["display_name"] == "立体投影(STG)"
+
+    restored = FrameAstrometricModel.from_json_payload(payload)
+    restored_radec = restored.pixel_to_sky_points(pixels)
+    expected_vectors = radec_to_unit_vectors(radec[:, 0], radec[:, 1])
+    restored_vectors = radec_to_unit_vectors(restored_radec[:, 0], restored_radec[:, 1])
+    assert np.max(np.linalg.norm(restored_vectors - expected_vectors, axis=1)) < 1e-6
 
 
 def test_fixed_profile_pose_solver_reuses_embedded_profile_without_refitting_intrinsics() -> None:

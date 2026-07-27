@@ -12,6 +12,7 @@ from .constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from .validation import _array_is_finite
 
@@ -372,6 +373,21 @@ def _projection_plane_coordinates(
             radius = 2.0 * np.sin(theta * 0.5)
         projected_x = radius * unit_x
         projected_y = radius * unit_y
+    elif lens_model == SKY_MATCHING_MODEL_STEREOGRAPHIC:
+        denominator = norm + cam_z
+        valid &= denominator > 1e-12
+        projected_x = np.divide(
+            2.0 * cam_x,
+            denominator,
+            out=np.full_like(cam_x, np.nan),
+            where=denominator > 1e-12,
+        )
+        projected_y = np.divide(
+            2.0 * cam_y,
+            denominator,
+            out=np.full_like(cam_y, np.nan),
+            where=denominator > 1e-12,
+        )
     elif lens_model in (SKY_MATCHING_MODEL_MERCATOR, SKY_MATCHING_MODEL_CYLINDRICAL_EQUIDISTANT):
         unit_y = np.clip(cam_y / np.where(norm > 1e-12, norm, 1.0), -1.0, 1.0)
         longitude = np.arctan2(cam_x, cam_z)

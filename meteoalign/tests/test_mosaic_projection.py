@@ -6,7 +6,10 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from meteoalign.alignment.constants import SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT
+from meteoalign.alignment.constants import (
+    SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
+)
 from meteoalign.application.app_reference_json_io import ReferenceJsonIOMixin
 from meteoalign.application.app_mosaic import (
     MOSAIC_PREVIEW_MAG_LIMIT,
@@ -162,6 +165,21 @@ def test_mosaic_model_defaults_keep_projection_for_free_anchor_models() -> None:
 
     assert not applied
     assert window.ui.comboBoxMosaicProjection.currentIndex() == 0
+
+
+def test_stereographic_mosaic_fov_stops_before_projection_singularity() -> None:
+    window = MosaicProjectionMixin.__new__(MosaicProjectionMixin)
+    window.ui = SimpleNamespace(
+        comboBoxMosaicProjection=_ComboBox(
+            MOSAIC_PROJECTION_MODELS.index(SKY_MATCHING_MODEL_STEREOGRAPHIC)
+        ),
+        doubleSpinBoxMosaicFov=_SpinBox(360.0, minimum=5.0, maximum=360.0),
+    )
+
+    window._update_mosaic_projection_controls()
+
+    assert window.ui.doubleSpinBoxMosaicFov.maximum() == 359.0
+    assert window.ui.doubleSpinBoxMosaicFov.value() == 359.0
 
 
 def test_mosaic_sky_preview_uses_fixed_grid_and_mag_limit() -> None:

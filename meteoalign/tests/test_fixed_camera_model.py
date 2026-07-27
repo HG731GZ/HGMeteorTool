@@ -7,7 +7,11 @@ from astropy import units as u
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
 
-from meteoalign.alignment import SKY_MATCHING_MODEL_RECTILINEAR, _project_unit_vectors_with_known_projection
+from meteoalign.alignment import (
+    SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
+    _project_unit_vectors_with_known_projection,
+)
 from meteoalign.fixed_camera_model import FixedCameraModel, estimate_frame_time_correction, fit_fixed_camera_model
 from meteoalign.sequence_geometry import SequenceGeometryModel, frame_astrometric_model_from_fixed_camera
 from meteoalign.simulator import ObserverSettings, ViewSettings, camera_basis_from_view, local_vectors_from_altaz
@@ -32,7 +36,9 @@ def _radec_from_altaz(
     return np.column_stack((icrs.ra.degree, icrs.dec.degree)).astype(np.float64)
 
 
-def _synthetic_fixed_camera_fixture():
+def _synthetic_fixed_camera_fixture(
+    lens_model: str = SKY_MATCHING_MODEL_RECTILINEAR,
+):
     observer = ObserverSettings(
         observation_time_utc=datetime(2025, 12, 14, 19, 15, 45, tzinfo=timezone.utc),
         latitude_deg=40.0,
@@ -58,7 +64,7 @@ def _synthetic_fixed_camera_fixture():
         center_x_px=500.0,
         center_y_px=380.0,
         scale_px=1250.0,
-        lens_model=SKY_MATCHING_MODEL_RECTILINEAR,
+        lens_model=lens_model,
         strict_visibility=True,
     )
     assert np.all(valid)
@@ -66,7 +72,7 @@ def _synthetic_fixed_camera_fixture():
         enu_vectors=enu_vectors,
         pixel_points=pixels,
         image_size=(1000, 800),
-        lens_model=SKY_MATCHING_MODEL_RECTILINEAR,
+        lens_model=lens_model,
         initial_rotation_matrix=rotation,
     )
     return fixed_model, observer, radec, pixels
@@ -88,6 +94,24 @@ def test_fixed_camera_model_inverse_pixels_to_altaz_matches_forward_projection()
 
     actual_alt_deg, actual_az_deg, valid = fixed_model.pixel_to_altaz_points(pixels)
 
+    assert np.all(valid)
+    expected_vectors = local_vectors_from_altaz(expected_alt_deg, expected_az_deg)
+    actual_vectors = local_vectors_from_altaz(actual_alt_deg, actual_az_deg)
+    assert np.max(np.linalg.norm(actual_vectors - expected_vectors, axis=1)) < 1e-4
+
+
+def test_stereographic_fixed_camera_inverse_round_trips() -> None:
+    fixed_model, observer, radec, pixels = _synthetic_fixed_camera_fixture(
+        SKY_MATCHING_MODEL_STEREOGRAPHIC
+    )
+    _predicted, expected_alt_deg, expected_az_deg = fixed_model.project_radec_points(
+        radec,
+        observer,
+    )
+
+    actual_alt_deg, actual_az_deg, valid = fixed_model.pixel_to_altaz_points(pixels)
+
+    assert fixed_model.lens_model == SKY_MATCHING_MODEL_STEREOGRAPHIC
     assert np.all(valid)
     expected_vectors = local_vectors_from_altaz(expected_alt_deg, expected_az_deg)
     actual_vectors = local_vectors_from_altaz(actual_alt_deg, actual_az_deg)

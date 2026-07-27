@@ -8,6 +8,7 @@ from meteoalign.alignment.constants import (
     SKY_MATCHING_MODEL_CYLINDRICAL_EQUIDISTANT,
     SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from meteoalign.coordinates import sky_plane_to_radec
 from meteoalign.mosaic_framing import (
@@ -91,3 +92,17 @@ def test_cylindrical_and_fisheye_dimensions_follow_projection_boundary() -> None
     assert cylindrical_height == math.ceil(math.pi * 1000.0 * 0.5)
     assert fisheye_height == math.ceil(math.pi * 1000.0 + 1.0)
     assert fisheye_width == math.ceil(fisheye_height / 0.5)
+
+
+def test_stereographic_dimensions_follow_standard_stg_radius() -> None:
+    width, height, scale = target_output_dimensions_for_resolution(
+        angular_resolution_rad_per_px=0.001,
+        projection_model=SKY_MATCHING_MODEL_STEREOGRAPHIC,
+        fov_deg=180.0,
+        height_over_width=0.5,
+    )
+
+    expected_width = 4.0 * 1000.0 * math.tan(math.radians(180.0) * 0.25)
+    assert width == math.ceil(expected_width)
+    assert height == math.ceil(expected_width * 0.5)
+    assert scale == 1000.0

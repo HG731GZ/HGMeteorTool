@@ -7,6 +7,7 @@ from meteoalign.simulator import (
     FISHEYE_EQUIDISTANT,
     MERCATOR_LENS_MODEL,
     RECTILINEAR_LENS_MODEL,
+    STEREOGRAPHIC_LENS_MODEL,
     CameraSettings,
     HorizontalMilkyWayCatalog,
     HorizontalMilkyWayPolygon,
@@ -20,6 +21,10 @@ from meteoalign.simulator import (
     local_vectors_from_altaz,
     local_vectors_to_altaz,
     project_horizontal_catalog,
+)
+from meteoalign.mosaic.export.target_transform import (
+    target_camera_vectors_to_image_points,
+    target_image_points_to_camera_vectors,
 )
 
 
@@ -176,6 +181,7 @@ def test_target_projection_pixel_inverse_round_trips_altaz() -> None:
     for lens_model in (
         RECTILINEAR_LENS_MODEL,
         FISHEYE_EQUIDISTANT,
+        STEREOGRAPHIC_LENS_MODEL,
         MERCATOR_LENS_MODEL,
         CYLINDRICAL_EQUIDISTANT_LENS_MODEL,
     ):
@@ -203,3 +209,35 @@ def test_target_projection_pixel_inverse_round_trips_altaz() -> None:
 
         assert np.all(inverse_valid & altaz_valid)
         assert np.max(np.linalg.norm(recovered_vectors - expected_vectors, axis=1)) < 1e-8
+
+
+def test_stereographic_export_transform_round_trips_beyond_front_hemisphere() -> None:
+    """全景导出 STG 变换应支持超过 180° 视场内的背向半球像素。"""
+
+    angles = np.deg2rad(np.asarray([0.0, 45.0, 100.0, 145.0], dtype=np.float64))
+    camera_vectors = np.column_stack(
+        (
+            np.sin(angles),
+            np.zeros_like(angles),
+            np.cos(angles),
+        )
+    )
+    camera = CameraSettings(
+        sensor_width_mm=36.0,
+        sensor_height_mm=18.0,
+        image_width_px=1200,
+        image_height_px=600,
+        focal_length_mm=24.0,
+        lens_model=STEREOGRAPHIC_LENS_MODEL,
+        fisheye_fov_deg=300.0,
+    )
+
+    pixels, projected_valid = target_camera_vectors_to_image_points(camera_vectors, camera)
+    restored, inverse_valid = target_image_points_to_camera_vectors(
+        pixels[:, 0],
+        pixels[:, 1],
+        camera,
+    )
+
+    assert np.all(projected_valid & inverse_valid)
+    assert np.max(np.linalg.norm(restored - camera_vectors, axis=1)) < 1e-10

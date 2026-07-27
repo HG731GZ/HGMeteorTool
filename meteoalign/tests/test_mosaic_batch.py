@@ -16,6 +16,7 @@ from meteoalign.application.app_mosaic_batch import (
 from meteoalign.mosaic.export.geometry import MosaicExportGeometry
 from meteoalign.mosaic_export import MosaicExportSourceImage
 from meteoalign.meteor_selection import MeteorBox, save_meteor_selection
+from meteoalign.simulator import STEREOGRAPHIC_LENS_MODEL
 
 
 class _Control:
@@ -446,6 +447,27 @@ def test_mosaic_batch_preview_info_contains_projection_and_pixel_counts() -> Non
     assert "投影：等距鱼眼(ARC)" in window.ui.labelMosaicBatchPreviewInfo.text
     assert "输出尺寸：6000 × 3000 px（18.00 MP）" in window.ui.labelMosaicBatchPreviewInfo.text
     assert "完整画布" not in window.ui.labelMosaicBatchPreviewInfo.text
+
+
+def test_mosaic_batch_preserves_stereographic_target_camera() -> None:
+    """批处理从取景变换恢复相机时不得把 STG 降级为其他投影。"""
+
+    window = _batch_window(0)
+    camera = window._mosaic_batch_camera_from_target_payload(
+        {
+            "boundary_width_px": 1200,
+            "boundary_height_px": 600,
+            "camera": {
+                "lens_model": STEREOGRAPHIC_LENS_MODEL,
+                "image_width_px": 1200,
+                "image_height_px": 600,
+                "fisheye_fov_deg": 220.0,
+            },
+        }
+    )
+
+    assert camera.lens_model == STEREOGRAPHIC_LENS_MODEL
+    assert camera.fisheye_fov_deg == 220.0
 
 
 def test_mosaic_batch_base_preview_is_8bit_and_cached(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

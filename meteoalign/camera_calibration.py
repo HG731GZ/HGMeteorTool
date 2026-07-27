@@ -10,6 +10,7 @@ from .alignment.constants import (
     SKY_KNOWN_PROJECTION_CODES,
     SKY_KNOWN_PROJECTION_DISPLAY_NAMES,
     SKY_KNOWN_PROJECTION_MODELS,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from .alignment.interpolation import AnchorInterpolation2D
 from .alignment.models import ProjectionSkyAlignmentTransform
@@ -542,6 +543,17 @@ class CameraCalibrationProfile:
                     plane_x[valid] * scale[valid],
                     plane_y[valid] * scale[valid],
                     np.cos(theta[valid]),
+                )
+            )
+        elif self.base_projection_type == SKY_MATCHING_MODEL_STEREOGRAPHIC:
+            radius_squared = plane_x * plane_x + plane_y * plane_y
+            denominator = 4.0 + radius_squared
+            valid &= np.isfinite(denominator) & (denominator > 1e-12)
+            vectors[valid] = np.column_stack(
+                (
+                    4.0 * plane_x[valid] / denominator[valid],
+                    4.0 * plane_y[valid] / denominator[valid],
+                    (4.0 - radius_squared[valid]) / denominator[valid],
                 )
             )
         elif self.base_projection_type in ("mercator", "cylindrical_equidistant"):

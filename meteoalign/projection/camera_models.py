@@ -10,17 +10,27 @@ from ..domain.settings import CameraSettings, ViewSettings
 RECTILINEAR_LENS_MODEL = "rectilinear"
 FISHEYE_EQUIDISTANT = "fisheye_equidistant"
 FISHEYE_EQUISOLID = "fisheye_equisolid"
+STEREOGRAPHIC_LENS_MODEL = "stereographic"
 MERCATOR_LENS_MODEL = "mercator"
 CYLINDRICAL_EQUIDISTANT_LENS_MODEL = "cylindrical_equidistant"
 FISHEYE_LENS_MODELS = {FISHEYE_EQUIDISTANT, FISHEYE_EQUISOLID}
 CYLINDRICAL_LENS_MODELS = {MERCATOR_LENS_MODEL, CYLINDRICAL_EQUIDISTANT_LENS_MODEL}
-SUPPORTED_LENS_MODELS = {RECTILINEAR_LENS_MODEL, *FISHEYE_LENS_MODELS, *CYLINDRICAL_LENS_MODELS}
+SUPPORTED_LENS_MODELS = {
+    RECTILINEAR_LENS_MODEL,
+    STEREOGRAPHIC_LENS_MODEL,
+    *FISHEYE_LENS_MODELS,
+    *CYLINDRICAL_LENS_MODELS,
+}
 
 
 def horizontal_fov_deg(camera: CameraSettings) -> float:
     """计算相机水平方向视场角。"""
 
-    if camera.lens_model in FISHEYE_LENS_MODELS or camera.lens_model in CYLINDRICAL_LENS_MODELS:
+    if (
+        camera.lens_model == STEREOGRAPHIC_LENS_MODEL
+        or camera.lens_model in FISHEYE_LENS_MODELS
+        or camera.lens_model in CYLINDRICAL_LENS_MODELS
+    ):
         return float(camera.fisheye_fov_deg)
     return float(np.degrees(2.0 * np.arctan(camera.sensor_width_mm / (2.0 * camera.focal_length_mm))))
 
@@ -28,6 +38,14 @@ def horizontal_fov_deg(camera: CameraSettings) -> float:
 def vertical_fov_deg(camera: CameraSettings) -> float:
     """计算相机垂直方向视场角。"""
 
+    if camera.lens_model == STEREOGRAPHIC_LENS_MODEL:
+        horizontal_fov_rad = np.deg2rad(
+            max(1.0, min(359.0, float(camera.fisheye_fov_deg)))
+        )
+        aspect = camera.image_height_px / max(float(camera.image_width_px), 1.0)
+        return float(
+            np.rad2deg(4.0 * np.arctan(aspect * np.tan(horizontal_fov_rad * 0.25)))
+        )
     if camera.lens_model in FISHEYE_LENS_MODELS or camera.lens_model in CYLINDRICAL_LENS_MODELS:
         aspect_scale = camera.image_height_px / max(float(camera.image_width_px), 1.0)
         return float(camera.fisheye_fov_deg * min(aspect_scale, 1.0))
@@ -104,6 +122,8 @@ def _project_altaz_points(
         return _project_altaz_points_rectilinear(alt_deg, az_deg, camera, basis)
     if camera.lens_model in FISHEYE_LENS_MODELS:
         return _project_altaz_points_fisheye(alt_deg, az_deg, camera, basis)
+    if camera.lens_model == STEREOGRAPHIC_LENS_MODEL:
+        return _project_altaz_points_stereographic(alt_deg, az_deg, camera, basis)
     if camera.lens_model in CYLINDRICAL_LENS_MODELS:
         return _project_altaz_points_cylindrical(alt_deg, az_deg, camera, basis)
     raise ValueError(f"Unsupported lens model: {camera.lens_model}")
@@ -145,6 +165,62 @@ def _fisheye_theta_from_radius_ratio(rho: np.ndarray, theta_max: float, lens_mod
     if lens_model == FISHEYE_EQUISOLID:
         return 2.0 * np.arcsin(np.clip(rho * np.sin(theta_max / 2.0), -1.0, 1.0))
     raise ValueError(f"Unsupported fisheye lens model: {lens_model}")
+
+
+def _stereographic_scale_px(camera: CameraSettings) -> float:
+    """返回 STG 投影中每单位 ``2*tan(theta/2)`` 对应的像素尺度。"""
+
+    fov_rad = np.deg2rad(max(1.0, min(359.0, float(camera.fisheye_fov_deg))))
+    boundary_radius = 2.0 * np.tan(fov_rad * 0.25)
+    return float(camera.image_width_px) / max(2.0 * boundary_radius, 1e-12)
+
+
+def _project_altaz_points_stereographic(
+    alt_deg: np.ndarray,
+    az_deg: np.ndarray,
+    camera: CameraSettings,
+    basis: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """把方向投影到以取景反方向为投影点的 Stereographic 平面。"""
+
+    vectors = _local_vectors_from_altaz(alt_deg, az_deg)
+    cam_x, cam_y, cam_z = _project_vectors_onto_camera_basis(vectors, basis)
+    norm = np.sqrt(cam_x * cam_x + cam_y * cam_y + cam_z * cam_z)
+    denominator = norm + cam_z
+    valid = (
+        np.isfinite(cam_x)
+        & np.isfinite(cam_y)
+        & np.isfinite(cam_z)
+        & np.isfinite(norm)
+        & (norm > 1e-12)
+        & (denominator > 1e-12)
+    )
+    plane_x = np.divide(
+        2.0 * cam_x,
+        denominator,
+        out=np.full_like(cam_x, np.nan),
+        where=valid,
+    )
+    plane_y = np.divide(
+        2.0 * cam_y,
+        denominator,
+        out=np.full_like(cam_y, np.nan),
+        where=valid,
+    )
+    scale_px = _stereographic_scale_px(camera)
+    x_px = camera.image_width_px * 0.5 + scale_px * plane_x
+    y_px = camera.image_height_px * 0.5 - scale_px * plane_y
+    margin_x = camera.image_width_px * 0.1
+    margin_y = camera.image_height_px * 0.1
+    valid &= (
+        np.isfinite(x_px)
+        & np.isfinite(y_px)
+        & (x_px >= -margin_x)
+        & (x_px <= camera.image_width_px + margin_x)
+        & (y_px >= -margin_y)
+        & (y_px <= camera.image_height_px + margin_y)
+    )
+    return x_px.astype(np.float64), y_px.astype(np.float64), valid.astype(bool)
 
 
 def _project_altaz_points_fisheye(alt_deg: np.ndarray, az_deg: np.ndarray, camera: CameraSettings, basis: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -211,6 +287,23 @@ def image_points_to_local_vectors(x_px: np.ndarray, y_px: np.ndarray, camera: Ca
         cam_y = np.divide(screen_y, r_px, out=np.zeros_like(screen_y), where=r_px > 1e-12) * plane_norm
         cam_z = np.cos(theta)
         valid = (rho <= 1.0 + 1e-9) & np.isfinite(cam_x) & np.isfinite(cam_y) & np.isfinite(cam_z)
+    elif camera.lens_model == STEREOGRAPHIC_LENS_MODEL:
+        center_x = camera.image_width_px * 0.5
+        center_y = camera.image_height_px * 0.5
+        scale_px = _stereographic_scale_px(camera)
+        plane_x = (x_px - center_x) / max(scale_px, 1e-12)
+        plane_y = (center_y - y_px) / max(scale_px, 1e-12)
+        radius_squared = plane_x * plane_x + plane_y * plane_y
+        denominator = 4.0 + radius_squared
+        cam_x = 4.0 * plane_x / denominator
+        cam_y = 4.0 * plane_y / denominator
+        cam_z = (4.0 - radius_squared) / denominator
+        valid = (
+            np.isfinite(cam_x)
+            & np.isfinite(cam_y)
+            & np.isfinite(cam_z)
+            & (denominator > 1e-12)
+        )
     elif camera.lens_model in CYLINDRICAL_LENS_MODELS:
         scale_px = _projection_horizontal_scale_px(camera)
         longitude = (x_px - camera.image_width_px * 0.5) / max(scale_px, 1e-12)

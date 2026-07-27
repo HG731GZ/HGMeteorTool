@@ -17,6 +17,7 @@ from .alignment.constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from .alignment.fitting import fit_projection_sky_alignment
 from .alignment.models import ProjectionSkyAlignmentTransform
@@ -390,6 +391,17 @@ class FixedCameraModel:
                     plane_x[valid] * scale[valid],
                     plane_y[valid] * scale[valid],
                     np.cos(theta[valid]),
+                )
+            )
+        elif transform.lens_model == SKY_MATCHING_MODEL_STEREOGRAPHIC:
+            radius_squared = plane_x * plane_x + plane_y * plane_y
+            denominator = 4.0 + radius_squared
+            valid &= np.isfinite(denominator) & (denominator > 1e-12)
+            vectors[valid] = np.column_stack(
+                (
+                    4.0 * plane_x[valid] / denominator[valid],
+                    4.0 * plane_y[valid] / denominator[valid],
+                    (4.0 - radius_squared[valid]) / denominator[valid],
                 )
             )
         elif transform.lens_model in (SKY_MATCHING_MODEL_MERCATOR, SKY_MATCHING_MODEL_CYLINDRICAL_EQUIDISTANT):

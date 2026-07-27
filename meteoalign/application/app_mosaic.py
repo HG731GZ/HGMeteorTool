@@ -26,6 +26,7 @@ from ..alignment.constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT,
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from .app_constants import SOURCE_MODEL_JSON_FILTER
 from .file_dialogs import get_multiple_open_file_names, get_open_file_name
@@ -509,6 +510,8 @@ class MosaicProjectionMixin:
             maximum_fov = 160.0
         elif projection_model in (SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT, SKY_MATCHING_MODEL_FISHEYE_EQUISOLID):
             maximum_fov = 300.0
+        elif projection_model == SKY_MATCHING_MODEL_STEREOGRAPHIC:
+            maximum_fov = 359.0
         else:
             maximum_fov = 360.0
         was_blocked = self.ui.doubleSpinBoxMosaicFov.blockSignals(True)

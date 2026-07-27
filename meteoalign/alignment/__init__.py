@@ -8,6 +8,7 @@ from .constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from .fitting import fit_preliminary_sky_alignment, fit_sky_alignment, infer_sky_image_orientation
 from .projections import _project_unit_vectors_with_known_projection
@@ -20,6 +21,7 @@ __all__ = [
     "SKY_MATCHING_MODEL_FISHEYE_EQUISOLID",
     "SKY_MATCHING_MODEL_MERCATOR",
     "SKY_MATCHING_MODEL_RECTILINEAR",
+    "SKY_MATCHING_MODEL_STEREOGRAPHIC",
     "_project_unit_vectors_with_known_projection",
     "fit_preliminary_sky_alignment",
     "fit_sky_alignment",

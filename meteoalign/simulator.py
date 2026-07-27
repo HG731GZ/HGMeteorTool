@@ -1417,6 +1417,10 @@ def project_horizontal_catalog(
         raise ValueError("Fisheye FOV must be between 1 and 300 degrees")
     if camera.lens_model in CYLINDRICAL_LENS_MODELS and not (1.0 <= camera.fisheye_fov_deg <= 360.0):
         raise ValueError("Cylindrical projection FOV must be between 1 and 360 degrees")
+    if camera.lens_model == STEREOGRAPHIC_LENS_MODEL and not (
+        1.0 <= camera.fisheye_fov_deg < 360.0
+    ):
+        raise ValueError("Stereographic projection FOV must be between 1 and 360 degrees")
 
     basis = _camera_basis(view)
 
@@ -1608,6 +1612,7 @@ from .projection.camera_models import (
     FISHEYE_LENS_MODELS,
     MERCATOR_LENS_MODEL,
     RECTILINEAR_LENS_MODEL,
+    STEREOGRAPHIC_LENS_MODEL,
     SUPPORTED_LENS_MODELS,
     _camera_basis,
     _camera_longitudes_from_altaz,
@@ -1619,8 +1624,10 @@ from .projection.camera_models import (
     _project_altaz_points_cylindrical,
     _project_altaz_points_fisheye,
     _project_altaz_points_rectilinear,
+    _project_altaz_points_stereographic,
     _project_vectors_onto_camera_basis,
     _projection_horizontal_scale_px,
+    _stereographic_scale_px,
     camera_basis_from_view,
     horizontal_fov_deg,
     image_points_to_local_vectors,

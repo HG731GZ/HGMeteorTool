@@ -55,6 +55,26 @@ DYNAMIC_INFORMATION_LABELS = (
 )
 
 
+def test_projection_model_controls_include_stereographic() -> None:
+    """星点匹配与全景构图下拉框都应提供 STG 投影。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    assert "立体投影(STG)" in [
+        ui.comboBoxSkyAlignmentModel.itemText(index)
+        for index in range(ui.comboBoxSkyAlignmentModel.count())
+    ]
+    assert "立体投影(STG)" in [
+        ui.comboBoxMosaicProjection.itemText(index)
+        for index in range(ui.comboBoxMosaicProjection.count())
+    ]
+
+    window.close()
+
+
 def test_mosaic_repair_mode_controls_default_to_smart() -> None:
     """单张与批处理导出都应提供三档修复模式，并默认选择智能。"""
 

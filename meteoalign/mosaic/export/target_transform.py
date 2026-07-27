@@ -14,9 +14,11 @@ from ...projection.camera_models import (
     FISHEYE_LENS_MODELS,
     MERCATOR_LENS_MODEL,
     RECTILINEAR_LENS_MODEL,
+    STEREOGRAPHIC_LENS_MODEL,
     _fisheye_radius_ratio,
     _fisheye_theta_from_radius_ratio,
     _projection_horizontal_scale_px,
+    _stereographic_scale_px,
 )
 from .geometry import MosaicExportGeometry
 
@@ -148,6 +150,30 @@ def target_camera_vectors_to_image_points(
         x_px = camera.image_width_px * 0.5 + unit_x * r_px
         y_px = camera.image_height_px * 0.5 - unit_y * r_px
         valid = (theta <= theta_max + 1e-9) & np.isfinite(x_px) & np.isfinite(y_px)
+    elif camera.lens_model == STEREOGRAPHIC_LENS_MODEL:
+        norm = np.linalg.norm(vectors, axis=1)
+        denominator = norm + cam_z
+        valid = (
+            np.all(np.isfinite(vectors), axis=1)
+            & np.isfinite(norm)
+            & (norm > 1e-12)
+            & (denominator > 1e-12)
+        )
+        plane_x = np.divide(
+            2.0 * cam_x,
+            denominator,
+            out=np.full_like(cam_x, np.nan),
+            where=valid,
+        )
+        plane_y = np.divide(
+            2.0 * cam_y,
+            denominator,
+            out=np.full_like(cam_y, np.nan),
+            where=valid,
+        )
+        scale_px = _stereographic_scale_px(camera)
+        x_px = camera.image_width_px * 0.5 + scale_px * plane_x
+        y_px = camera.image_height_px * 0.5 - scale_px * plane_y
     elif camera.lens_model in CYLINDRICAL_LENS_MODELS:
         norm = np.linalg.norm(vectors, axis=1)
         unit_y = np.divide(cam_y, norm, out=np.zeros_like(cam_y), where=norm > 1e-12)
@@ -227,6 +253,23 @@ def target_image_points_to_camera_vectors(
         cam_y = unit_y * plane_norm
         cam_z = np.cos(theta)
         valid = (rho <= 1.0 + 1e-9) & np.isfinite(cam_x) & np.isfinite(cam_y) & np.isfinite(cam_z)
+    elif camera.lens_model == STEREOGRAPHIC_LENS_MODEL:
+        center_x = camera.image_width_px * 0.5
+        center_y = camera.image_height_px * 0.5
+        scale_px = _stereographic_scale_px(camera)
+        plane_x = (x_values - center_x) / max(scale_px, 1e-12)
+        plane_y = (center_y - y_values) / max(scale_px, 1e-12)
+        radius_squared = plane_x * plane_x + plane_y * plane_y
+        denominator = 4.0 + radius_squared
+        cam_x = 4.0 * plane_x / denominator
+        cam_y = 4.0 * plane_y / denominator
+        cam_z = (4.0 - radius_squared) / denominator
+        valid = (
+            np.isfinite(cam_x)
+            & np.isfinite(cam_y)
+            & np.isfinite(cam_z)
+            & (denominator > 1e-12)
+        )
     elif camera.lens_model in CYLINDRICAL_LENS_MODELS:
         center_x = camera.image_width_px * 0.5
         center_y = camera.image_height_px * 0.5

@@ -2005,6 +2005,11 @@
                   </item>
                   <item>
                    <property name="text">
+                    <string>立体投影(STG)</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
                     <string>墨卡托(MER)</string>
                    </property>
                   </item>
@@ -2691,6 +2696,11 @@
                    <item>
                     <property name="text">
                      <string>等立体角鱼眼(ZEA)</string>
+                    </property>
+                   </item>
+                   <item>
+                    <property name="text">
+                     <string>立体投影(STG)</string>
                     </property>
                    </item>
                    <item>

@@ -11,6 +11,7 @@ from ..alignment.constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUISOLID,
     SKY_MATCHING_MODEL_MERCATOR,
     SKY_MATCHING_MODEL_RECTILINEAR,
+    SKY_MATCHING_MODEL_STEREOGRAPHIC,
 )
 from ..coordinates import normalize_vector, radec_to_unit_vectors
 
@@ -149,6 +150,10 @@ def target_output_dimensions_for_resolution(
     if projection_model == SKY_MATCHING_MODEL_RECTILINEAR:
         half_fov = min(fov_rad * 0.5, math.radians(89.999))
         boundary_width = 2.0 * px_per_rad * math.tan(half_fov)
+        boundary_height = boundary_width * aspect
+    elif projection_model == SKY_MATCHING_MODEL_STEREOGRAPHIC:
+        safe_fov_rad = min(fov_rad, math.radians(359.0))
+        boundary_width = 4.0 * px_per_rad * math.tan(safe_fov_rad * 0.25)
         boundary_height = boundary_width * aspect
     elif projection_model in (SKY_MATCHING_MODEL_MERCATOR, SKY_MATCHING_MODEL_CYLINDRICAL_EQUIDISTANT):
         boundary_width = px_per_rad * fov_rad
