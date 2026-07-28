@@ -64,6 +64,7 @@ EDITABLE_PREFERENCE_KEYS = frozenset(
         "mosaic_render_fps_limit",
         "mosaic_font_size_multiplier",
         "mosaic_star_marker_size_multiplier",
+        "mosaic_composition_guide_line_width_px",
         "mosaic_export_block_rows",
         "mosaic_map_tile_size_px",
         "mosaic_export_tiff_lzw_compression",
@@ -217,6 +218,9 @@ class PreferencesPage(QWidget, AppWidgetMixin):
             ui.spinBoxMosaicRenderFpsLimit.setValue(config.mosaic_render_fps_limit)
             ui.doubleSpinBoxMosaicFontSizeMultiplier.setValue(config.mosaic_font_size_multiplier)
             ui.doubleSpinBoxMosaicStarMarkerSizeMultiplier.setValue(config.mosaic_star_marker_size_multiplier)
+            ui.doubleSpinBoxMosaicCompositionGuideLineWidth.setValue(
+                config.mosaic_composition_guide_line_width_px
+            )
             ui.spinBoxMosaicExportBlockRows.setValue(config.mosaic_export_block_rows)
             ui.spinBoxMosaicMapTileSize.setValue(config.mosaic_map_tile_size_px)
             ui.checkBoxMosaicTiffLzwCompression.setChecked(config.mosaic_export_tiff_lzw_compression)
@@ -268,6 +272,7 @@ class PreferencesPage(QWidget, AppWidgetMixin):
             ui.spinBoxMosaicRenderFpsLimit,
             ui.doubleSpinBoxMosaicFontSizeMultiplier,
             ui.doubleSpinBoxMosaicStarMarkerSizeMultiplier,
+            ui.doubleSpinBoxMosaicCompositionGuideLineWidth,
             ui.spinBoxMosaicExportBlockRows,
             ui.spinBoxMeteorRadiantLabelFontSize,
             ui.doubleSpinBoxMeteorCountMultiplier,
@@ -474,6 +479,9 @@ class PreferencesPage(QWidget, AppWidgetMixin):
             "mosaic_render_fps_limit": ui.spinBoxMosaicRenderFpsLimit.value(),
             "mosaic_font_size_multiplier": ui.doubleSpinBoxMosaicFontSizeMultiplier.value(),
             "mosaic_star_marker_size_multiplier": ui.doubleSpinBoxMosaicStarMarkerSizeMultiplier.value(),
+            "mosaic_composition_guide_line_width_px": (
+                ui.doubleSpinBoxMosaicCompositionGuideLineWidth.value()
+            ),
             "mosaic_export_block_rows": ui.spinBoxMosaicExportBlockRows.value(),
             "mosaic_map_tile_size_px": ui.spinBoxMosaicMapTileSize.value(),
             "mosaic_export_tiff_lzw_compression": ui.checkBoxMosaicTiffLzwCompression.isChecked(),

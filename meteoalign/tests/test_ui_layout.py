@@ -290,6 +290,12 @@ def test_macos_layout_is_compact_and_preserves_mosaic_preview_width() -> None:
     assert primary_header.itemAt(0).widget() is ui.labelMosaicPreviewTitle
     assert primary_header.itemAt(2).widget() is ui.checkBoxMosaicSkyOnly
     assert primary_header.itemAt(3).widget() is ui.checkBoxMosaicMeteorOnly
+    assert primary_header.itemAt(4).widget() is ui.checkBoxMosaicCompositionThirds
+    assert primary_header.itemAt(5).widget() is ui.checkBoxMosaicCompositionCrosshair
+    assert primary_header.itemAt(6).widget() is ui.checkBoxMosaicCompositionDiagonals
+    assert ui.checkBoxMosaicCompositionThirds.isChecked()
+    assert not ui.checkBoxMosaicCompositionCrosshair.isChecked()
+    assert not ui.checkBoxMosaicCompositionDiagonals.isChecked()
     assert controls_header.itemAt(0).widget() is ui.labelMosaicDisplayModel
     assert controls_header.itemAt(1).widget() is ui.comboBoxMosaicDisplayModel
     assert controls_header.itemAt(3).widget() is ui.labelMosaicOverlayOpacity

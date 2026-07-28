@@ -56,6 +56,7 @@ class StarMapUiConfig:
     mosaic_render_fps_limit: int = 60
     mosaic_font_size_multiplier: float = 0.5
     mosaic_star_marker_size_multiplier: float = 0.5
+    mosaic_composition_guide_line_width_px: float = 1.25
     mosaic_export_block_rows: int = 1024
     mosaic_map_tile_size_px: int = 4
     mosaic_export_tiff_lzw_compression: bool = True
@@ -367,6 +368,13 @@ def load_star_map_ui_config(path: Path | None = None) -> StarMapUiConfig:
             0.5,
             0.1,
             2.0,
+        ),
+        mosaic_composition_guide_line_width_px=_read_float(
+            raw_config,
+            "mosaic_composition_guide_line_width_px",
+            1.25,
+            0.25,
+            20.0,
         ),
         mosaic_export_block_rows=_read_int(raw_config, "mosaic_export_block_rows", 1024, 8, 4096),
         mosaic_map_tile_size_px=_read_int(

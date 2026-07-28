@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from PyQt5.QtCore import QRectF
+from PyQt5.QtGui import QColor, QImage
 
 from meteoalign.alignment.constants import (
     SKY_MATCHING_MODEL_FISHEYE_EQUIDISTANT,
@@ -594,6 +596,37 @@ def _mosaic_image_size_window() -> MosaicProjectionMixin:
     window._clear_mosaic_imported_framing = lambda: None  # type: ignore[method-assign]
     window.schedule_mosaic_render = lambda *args, **kwargs: None  # type: ignore[method-assign]
     return window
+
+
+def _image_has_yellow_pixel_near(image: QImage, x: int, y: int, radius: int = 2) -> bool:
+    for sample_y in range(max(0, y - radius), min(image.height(), y + radius + 1)):
+        for sample_x in range(max(0, x - radius), min(image.width(), x + radius + 1)):
+            color = image.pixelColor(sample_x, sample_y)
+            if color.red() > 120 and color.green() > 90 and color.blue() < 80:
+                return True
+    return False
+
+
+def test_mosaic_composition_guides_draw_selected_yellow_lines_inside_crop() -> None:
+    """三分法、十字和对角线应可独立叠加，并使用配置线宽在裁剪框内绘制。"""
+
+    window = MosaicProjectionMixin.__new__(MosaicProjectionMixin)
+    window.ui_config = SimpleNamespace(mosaic_composition_guide_line_width_px=1.25)
+    window.ui = SimpleNamespace(
+        checkBoxMosaicCompositionThirds=_CheckBox(True),
+        checkBoxMosaicCompositionCrosshair=_CheckBox(True),
+        checkBoxMosaicCompositionDiagonals=_CheckBox(True),
+    )
+    window._mosaic_crop_rect_for_preview = lambda _width, _height: QRectF(10.0, 10.0, 90.0, 90.0)  # type: ignore[method-assign]
+    image = QImage(120, 120, QImage.Format_ARGB32)
+    image.fill(QColor(0, 0, 0))
+
+    window._paint_mosaic_composition_guides(image)
+
+    assert _image_has_yellow_pixel_near(image, 40, 30)  # 第一条三分竖线
+    assert _image_has_yellow_pixel_near(image, 55, 30)  # 十字竖线
+    assert _image_has_yellow_pixel_near(image, 55, 55)  # 对角线交点
+    assert not _image_has_yellow_pixel_near(image, 5, 5)
 
 
 def test_mosaic_image_size_percent_and_manual_locked_ratio_apply_before_crop() -> None:

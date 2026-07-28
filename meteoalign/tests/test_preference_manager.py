@@ -104,6 +104,7 @@ def test_mosaic_display_scales_and_search_radii_have_independent_defaults(tmp_pa
 
     assert config.mosaic_font_size_multiplier == 0.5
     assert config.mosaic_star_marker_size_multiplier == 0.5
+    assert config.mosaic_composition_guide_line_width_px == 1.25
     assert config.auto_match_default_search_radius_px == 30
     assert config.sequence_psf_search_radius_px == 30
     assert config.use_8bit_psf_precision is True

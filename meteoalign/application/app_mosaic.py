@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
-from PyQt5.QtCore import QDateTime, QElapsedTimer, QEvent, QRectF, QTimer, Qt
+from PyQt5.QtCore import QDateTime, QElapsedTimer, QEvent, QPointF, QRectF, QTimer, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter, QPen
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -344,6 +344,12 @@ class MosaicProjectionMixin:
             self.ui.checkBoxMosaicSkyOnly.setChecked(False)
         if hasattr(self.ui, "checkBoxMosaicMeteorOnly"):
             self.ui.checkBoxMosaicMeteorOnly.setChecked(False)
+        if hasattr(self.ui, "checkBoxMosaicCompositionThirds"):
+            self.ui.checkBoxMosaicCompositionThirds.setChecked(True)
+        if hasattr(self.ui, "checkBoxMosaicCompositionCrosshair"):
+            self.ui.checkBoxMosaicCompositionCrosshair.setChecked(False)
+        if hasattr(self.ui, "checkBoxMosaicCompositionDiagonals"):
+            self.ui.checkBoxMosaicCompositionDiagonals.setChecked(False)
         if hasattr(self.ui, "doubleSpinBoxMosaicOverlayOpacity"):
             self.ui.doubleSpinBoxMosaicOverlayOpacity.setValue(100.0)
         if hasattr(self.ui, "spinBoxMosaicGridPrecision"):
@@ -424,6 +430,13 @@ class MosaicProjectionMixin:
             self.ui.checkBoxMosaicSkyOnly.toggled.connect(self.schedule_mosaic_render)
         if hasattr(self.ui, "checkBoxMosaicMeteorOnly"):
             self.ui.checkBoxMosaicMeteorOnly.toggled.connect(self._handle_mosaic_meteor_only_toggled)
+        for control_name in (
+            "checkBoxMosaicCompositionThirds",
+            "checkBoxMosaicCompositionCrosshair",
+            "checkBoxMosaicCompositionDiagonals",
+        ):
+            if hasattr(self.ui, control_name):
+                getattr(self.ui, control_name).toggled.connect(self.schedule_mosaic_render)
         if hasattr(self.ui, "doubleSpinBoxMosaicOverlayOpacity"):
             self.ui.doubleSpinBoxMosaicOverlayOpacity.valueChanged.connect(self.schedule_mosaic_render)
         if hasattr(self.ui, "comboBoxMosaicDisplayModel"):
@@ -2455,6 +2468,7 @@ class MosaicProjectionMixin:
             )
             result = self._mosaic_render_coordinator.render(request)
             self._paint_mosaic_crop_rect(result.image)
+            self._paint_mosaic_composition_guides(result.image)
             self.mosaic_image_item.set_image(result.image)
             self.mosaic_scene.setSceneRect(0.0, 0.0, float(width), float(height))
             self.ui.mosaicProjectionView.resetTransform()
@@ -2494,6 +2508,71 @@ class MosaicProjectionMixin:
         painter.setBrush(Qt.NoBrush)
         inset = pen.widthF() * 0.5
         painter.drawRect(rect.adjusted(inset, inset, -inset, -inset))
+        painter.end()
+
+    def _paint_mosaic_composition_guides(self, image: QImage) -> None:
+        """在红色裁剪框之后绘制其内部的黄色构图参考线。"""
+
+        thirds = (
+            hasattr(self.ui, "checkBoxMosaicCompositionThirds")
+            and self.ui.checkBoxMosaicCompositionThirds.isChecked()
+        )
+        crosshair = (
+            hasattr(self.ui, "checkBoxMosaicCompositionCrosshair")
+            and self.ui.checkBoxMosaicCompositionCrosshair.isChecked()
+        )
+        diagonals = (
+            hasattr(self.ui, "checkBoxMosaicCompositionDiagonals")
+            and self.ui.checkBoxMosaicCompositionDiagonals.isChecked()
+        )
+        if not (thirds or crosshair or diagonals):
+            return
+
+        rect = self._mosaic_crop_rect_for_preview(image.width(), image.height())
+        if rect is None:
+            return
+        configured_width = getattr(
+            self.ui_config,
+            "mosaic_composition_guide_line_width_px",
+            1.25,
+        )
+        try:
+            line_width = min(max(float(configured_width), 0.25), 20.0)
+        except (TypeError, ValueError):
+            line_width = 1.25
+
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        pen = QPen(QColor(255, 215, 0, 230))
+        pen.setWidthF(line_width)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        crop_pen_width = max(1.5, min(float(image.width()), float(image.height())) / 320.0)
+        inset = max(crop_pen_width, line_width) * 0.5
+        guide_rect = rect.adjusted(inset, inset, -inset, -inset)
+        if guide_rect.width() <= 0.0 or guide_rect.height() <= 0.0:
+            painter.end()
+            return
+        painter.setClipRect(guide_rect)
+
+        left = guide_rect.left()
+        right = guide_rect.right()
+        top = guide_rect.top()
+        bottom = guide_rect.bottom()
+        if thirds:
+            for fraction in (1.0 / 3.0, 2.0 / 3.0):
+                x = left + guide_rect.width() * fraction
+                y = top + guide_rect.height() * fraction
+                painter.drawLine(QPointF(x, top), QPointF(x, bottom))
+                painter.drawLine(QPointF(left, y), QPointF(right, y))
+        if crosshair:
+            center = guide_rect.center()
+            painter.drawLine(QPointF(center.x(), top), QPointF(center.x(), bottom))
+            painter.drawLine(QPointF(left, center.y()), QPointF(right, center.y()))
+        if diagonals:
+            painter.drawLine(guide_rect.topLeft(), guide_rect.bottomRight())
+            painter.drawLine(guide_rect.topRight(), guide_rect.bottomLeft())
         painter.end()
 
     def _mosaic_source_texture_long_side_px(

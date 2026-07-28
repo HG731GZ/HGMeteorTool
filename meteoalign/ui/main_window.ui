@@ -3486,6 +3486,39 @@
                </property>
               </widget>
              </item>
+             <item>
+              <widget class="QCheckBox" name="checkBoxMosaicCompositionThirds">
+               <property name="toolTip">
+                <string>在裁剪框内显示三分法 3×3 构图参考线。</string>
+               </property>
+               <property name="text">
+                <string>3×3 网格</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkBoxMosaicCompositionCrosshair">
+               <property name="toolTip">
+                <string>在裁剪框内显示水平与垂直中心线。</string>
+               </property>
+               <property name="text">
+                <string>十字</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="checkBoxMosaicCompositionDiagonals">
+               <property name="toolTip">
+                <string>在裁剪框内显示两条对角构图参考线。</string>
+               </property>
+               <property name="text">
+                <string>对角线</string>
+               </property>
+              </widget>
+             </item>
             </layout>
            </item>
            <item>
