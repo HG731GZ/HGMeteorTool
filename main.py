@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from meteoalign.application.main_window import main
+from meteoralign.application.main_window import main
 
 
 if __name__ == "__main__":

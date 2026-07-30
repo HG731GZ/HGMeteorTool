@@ -18,10 +18,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from meteoalign.mosaic.export.geometry import MosaicExportGeometry
-from meteoalign.mosaic.export.remap_builder import build_reprojection_map
-from meteoalign.mosaic_model_io import _load_mosaic_source_model
-from meteoalign.simulator import CameraSettings, RECTILINEAR_LENS_MODEL, ViewSettings
+from meteoralign.mosaic.export.geometry import MosaicExportGeometry
+from meteoralign.mosaic.export.remap_builder import build_reprojection_map
+from meteoralign.mosaic_model_io import _load_mosaic_source_model
+from meteoralign.simulator import CameraSettings, RECTILINEAR_LENS_MODEL, ViewSettings
 
 
 def parse_arguments() -> argparse.Namespace:

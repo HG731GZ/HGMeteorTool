@@ -1,4 +1,4 @@
-# MeteoAlign
+# MeteorAlign
 
 面向星野摄影与流星雨摄影的离线星空视野模拟工具。
 
@@ -35,7 +35,7 @@ python main.py
 也可以使用包启动方式：
 
 ```bash
-python -m meteoalign
+python -m meteoralign
 ```
 
 当前程序依赖 `catalog/` 目录下的离线星表数据，请保持 `catalog` 文件夹与源码一起放在项目根目录。
