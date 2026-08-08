@@ -823,6 +823,9 @@ class AlignmentMixin:
             self.ui.checkBoxShowSkyMask.blockSignals(was_blocked)
         self.ui.pushButtonAutoMatchFieldStars.setEnabled(has_alignment and has_formal_pair_count)
         self.ui.pushButtonExportSourceModel.setEnabled(has_export_model)
+        star_pair_assistant = getattr(self, "star_pair_assistant", None)
+        if star_pair_assistant is not None:
+            star_pair_assistant.set_source_model_export_enabled(has_export_model)
         if hasattr(self, "_update_xisf_export_control"):
             self._update_xisf_export_control()
         self._update_camera_profile_controls()

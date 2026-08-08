@@ -93,6 +93,13 @@ def test_star_matching_page_exposes_pixinsight_xisf_export_controls() -> None:
     ]
     assert ui.pushButtonExportXisf.text() == "导出 XISF"
     assert not ui.pushButtonExportXisf.isEnabled()
+    assert ui.groupBoxXisfExport.title() == "导出xisf"
+    assert ui.comboBoxXisfControlPointMode.parent() is ui.groupBoxXisfExport
+    assert ui.pushButtonExportXisf.parent() is ui.groupBoxXisfExport
+    source_model_index = ui.verticalLayoutReferencePickSidePanel.indexOf(ui.groupBoxAstrometricModel)
+    xisf_export_index = ui.verticalLayoutReferencePickSidePanel.indexOf(ui.groupBoxXisfExport)
+    reference_alignment_index = ui.verticalLayoutReferencePickSidePanel.indexOf(ui.groupBoxReferenceAlignment)
+    assert 0 <= source_model_index < xisf_export_index < reference_alignment_index
 
     window.close()
 
@@ -587,6 +594,11 @@ def test_star_pair_assistant_owns_moved_controls_and_uses_normal_window_layer() 
     main_ui.setupUi(window)
     dialog = StarPairAssistantDialog()
     dialog.bind_controls_to(main_ui)
+    export_calls: list[str] = []
+    dialog.bind_source_model_controls_to(
+        main_ui,
+        export_callback=lambda: export_calls.append("export"),
+    )
 
     assert not dialog.isModal()
     assert dialog.parentWidget() is None
@@ -611,6 +623,30 @@ def test_star_pair_assistant_owns_moved_controls_and_uses_normal_window_layer() 
     assert dialog.ui.horizontalLayoutStarPairResetButtons.itemAt(0).widget() is dialog.ui.pushButtonClearStarPairs
     assert dialog.ui.horizontalLayoutStarPairResetButtons.itemAt(1).widget() is dialog.ui.pushButtonDeleteStarPairs
     assert dialog.ui.formLayoutAutoMatch.fieldGrowthPolicy() == QFormLayout.AllNonFixedFieldsGrow
+    assert dialog.ui.groupBoxSourceModel.title() == "源图映射"
+    assert dialog.ui.formLayoutSourceModel.fieldGrowthPolicy() == QFormLayout.AllNonFixedFieldsGrow
+    assert dialog.ui.comboBoxSkyAlignmentModel is not main_ui.comboBoxSkyAlignmentModel
+    assert [
+        dialog.ui.comboBoxSkyAlignmentModel.itemText(index)
+        for index in range(dialog.ui.comboBoxSkyAlignmentModel.count())
+    ] == [
+        main_ui.comboBoxSkyAlignmentModel.itemText(index)
+        for index in range(main_ui.comboBoxSkyAlignmentModel.count())
+    ]
+    dialog.ui.comboBoxSkyAlignmentModel.setCurrentIndex(3)
+    assert main_ui.comboBoxSkyAlignmentModel.currentIndex() == 3
+    main_ui.comboBoxSkyAlignmentModel.setCurrentIndex(5)
+    assert dialog.ui.comboBoxSkyAlignmentModel.currentIndex() == 5
+    assert dialog.ui.pushButtonExportSourceModel.text() == "导出映射"
+    assert (
+        dialog.ui.pushButtonExportSourceModel.isEnabled()
+        == main_ui.pushButtonExportSourceModel.isEnabled()
+    )
+    dialog.set_source_model_export_enabled(False)
+    assert not dialog.ui.pushButtonExportSourceModel.isEnabled()
+    dialog.set_source_model_export_enabled(True)
+    dialog.ui.pushButtonExportSourceModel.click()
+    assert export_calls == ["export"]
     assert dialog.ui.tableWidgetStarPairs.columnCount() == 6
     assert dialog.ui.tableWidgetStarPairs.horizontalHeaderItem(3).text() == "质量"
     assert dialog.ui.tableWidgetStarPairs.horizontalHeaderItem(5).text() == "标注"

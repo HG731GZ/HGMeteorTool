@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QWidget
+from PyQt5.QtWidgets import QComboBox, QDialog, QWidget
 
 from ..ui.ui_star_pair_assistant_dialog import Ui_StarPairAssistantDialog
 
@@ -43,6 +43,8 @@ class StarPairAssistantDialog(QDialog):
         self.ui = Ui_StarPairAssistantDialog()
         self.ui.setupUi(self)
         self.setModal(False)
+        self._syncing_source_model_controls = False
+        self._source_model_target_ui: object | None = None
         self.ui.checkBoxStarPairAssistantAlwaysOnTop.toggled.connect(self.set_always_on_top)
 
     def set_always_on_top(self, enabled: bool) -> None:
@@ -85,6 +87,53 @@ class StarPairAssistantDialog(QDialog):
 
         for name in STAR_PAIR_ASSISTANT_UI_NAMES:
             setattr(target_ui, name, getattr(self.ui, name))
+
+    def bind_source_model_controls_to(self, target_ui: object, export_callback=None) -> None:  # type: ignore[no-untyped-def]
+        """让助手与主窗口各自保留控件，并双向同步源图映射投影选项。"""
+
+        main_combo = getattr(target_ui, "comboBoxSkyAlignmentModel")
+        if not isinstance(main_combo, QComboBox):
+            raise TypeError("主窗口缺少有效的基础投影模型选项。")
+        assistant_combo = self.ui.comboBoxSkyAlignmentModel
+        main_items = [main_combo.itemText(index) for index in range(main_combo.count())]
+        assistant_items = [
+            assistant_combo.itemText(index) for index in range(assistant_combo.count())
+        ]
+        if assistant_items != main_items:
+            raise ValueError("星点匹配助手与主窗口的基础投影模型选项不一致。")
+
+        self._source_model_target_ui = target_ui
+        assistant_combo.setCurrentIndex(main_combo.currentIndex())
+        main_combo.currentIndexChanged.connect(self._sync_source_model_from_main_window)
+        assistant_combo.currentIndexChanged.connect(self._sync_source_model_from_assistant)
+        self.ui.pushButtonExportSourceModel.setEnabled(
+            bool(getattr(target_ui, "pushButtonExportSourceModel").isEnabled())
+        )
+        if export_callback is not None:
+            self.ui.pushButtonExportSourceModel.clicked.connect(export_callback)
+
+    def _sync_source_model_combo(self, target: QComboBox, index: int) -> None:
+        if self._syncing_source_model_controls or target.currentIndex() == int(index):
+            return
+        self._syncing_source_model_controls = True
+        try:
+            target.setCurrentIndex(int(index))
+        finally:
+            self._syncing_source_model_controls = False
+
+    def _sync_source_model_from_main_window(self, index: int) -> None:
+        self._sync_source_model_combo(self.ui.comboBoxSkyAlignmentModel, index)
+
+    def _sync_source_model_from_assistant(self, index: int) -> None:
+        target_ui = self._source_model_target_ui
+        if target_ui is None:
+            return
+        self._sync_source_model_combo(target_ui.comboBoxSkyAlignmentModel, index)
+
+    def set_source_model_export_enabled(self, enabled: bool) -> None:
+        """同步助手中“导出映射”按钮的可用状态。"""
+
+        self.ui.pushButtonExportSourceModel.setEnabled(bool(enabled))
 
 
 __all__ = ["StarPairAssistantDialog"]

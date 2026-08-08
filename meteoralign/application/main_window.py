@@ -272,6 +272,10 @@ class MainWindow(
         # 匹配控件实际位于独立窗口；同名接口仍挂在主 UI 上，供各业务模块共享。
         self.star_pair_assistant = StarPairAssistantDialog()
         self.star_pair_assistant.bind_controls_to(self.ui)
+        self.star_pair_assistant.bind_source_model_controls_to(
+            self.ui,
+            export_callback=self.export_source_model_json,
+        )
         self.image_preview_dialog = ImagePreviewDialog()
         self.image_group_assistant = ImageGroupAssistantDialog(self.image_preview_dialog)
         self.ui_config = load_star_map_ui_config()
