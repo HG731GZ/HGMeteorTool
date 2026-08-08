@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import fields
 from pathlib import Path
 
@@ -39,6 +40,42 @@ def test_missing_preference_file_is_created_with_all_defaults(tmp_path: Path) ->
     assert written[LAST_IMPORT_DIRECTORY_KEY] == ""
     for comment in PREFERENCE_COMMENTS.values():
         assert f"// {comment}" in written_text
+
+
+def test_frozen_macos_migrates_legacy_app_sibling_preferences(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:  # type: ignore[no-untyped-def]
+    """新版首次启动应把旧版程序旁的配置迁移到用户 Application Support。"""
+
+    applications_dir = tmp_path / "Applications"
+    app_executable = (
+        applications_dir
+        / "HoshinoPanoAssistant.app"
+        / "Contents"
+        / "MacOS"
+        / "HoshinoPanoAssistant"
+    )
+    legacy_path = applications_dir / "preference.json"
+    legacy_path.parent.mkdir(parents=True)
+    legacy_path.write_text('{"star_name_font_size_pt": 19}', encoding="utf-8")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "executable", str(app_executable))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    values = ensure_preference_file()
+    migrated_path = (
+        tmp_path
+        / "home"
+        / "Library"
+        / "Application Support"
+        / "HoshinoPanoAssistant"
+        / "preference.json"
+    )
+
+    assert values["star_name_font_size_pt"] == 19
+    assert _read_jsonc(migrated_path)["star_name_font_size_pt"] == 19
 
 
 def test_preference_defaults_cover_every_ui_config_field() -> None:

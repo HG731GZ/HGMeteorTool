@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from .runtime_paths import frozen_app_sibling_dir, is_frozen_app, source_project_root
+from .runtime_paths import (
+    is_frozen_app,
+    legacy_frozen_preference_paths,
+    source_project_root,
+    user_config_dir,
+)
 
 
 LAST_IMPORT_DIRECTORY_KEY = "last_import_directory"
@@ -260,10 +265,10 @@ PREFERENCE_SECTION_START_KEYS = {
 
 
 def default_preference_path() -> Path:
-    """返回源码或打包程序使用的外置配置路径。"""
+    """返回源码配置，或打包程序当前用户专属的可写配置路径。"""
 
     if is_frozen_app():
-        return frozen_app_sibling_dir() / "preference.json"
+        return user_config_dir() / "preference.json"
     return source_project_root() / "preference.json"
 
 
@@ -355,10 +360,19 @@ def _preference_has_required_comments(path: Path) -> bool:
 
 
 def ensure_preference_file(path: str | Path | None = None) -> dict[str, object]:
-    """创建缺失配置并补齐字段，同时保留已有值和未知扩展字段。"""
+    """创建缺失配置并补齐字段，同时迁移旧版打包程序旁的配置。"""
 
     preference_path = Path(path).expanduser() if path is not None else default_preference_path()
-    existing = _read_preference_values(preference_path)
+    target_existing = _read_preference_values(preference_path)
+    existing = target_existing
+    if path is None and target_existing is None and is_frozen_app():
+        for legacy_path in legacy_frozen_preference_paths():
+            if legacy_path == preference_path:
+                continue
+            legacy_values = _read_preference_values(legacy_path)
+            if legacy_values is not None:
+                existing = legacy_values
+                break
     values = dict(DEFAULT_PREFERENCE_VALUES)
     if existing is not None:
         values.update(existing)
@@ -368,7 +382,7 @@ def ensure_preference_file(path: str | Path | None = None) -> dict[str, object]:
         values[LAST_IMPORT_DIRECTORY_KEY] = ""
 
     needs_write = (
-        existing is None
+        target_existing is None
         or any(key not in existing for key in DEFAULT_PREFERENCE_VALUES)
         or "meteor_detection_overwrite" in existing
         or not _preference_has_required_comments(preference_path)

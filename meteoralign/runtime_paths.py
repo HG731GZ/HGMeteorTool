@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+
+APPLICATION_CONFIG_DIR_NAME = "HoshinoPanoAssistant"
 
 
 def source_project_root() -> Path:
@@ -25,6 +29,35 @@ def frozen_app_sibling_dir() -> Path:
             if parent.suffix == ".app":
                 return parent.parent
     return executable_path.parent
+
+
+def user_config_dir() -> Path:
+    """返回当前用户可写的应用配置目录，避免写入安装目录。"""
+
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APPLICATION_CONFIG_DIR_NAME
+    if sys.platform == "win32":
+        roaming_app_data = os.environ.get("APPDATA", "").strip()
+        base_dir = (
+            Path(roaming_app_data).expanduser()
+            if roaming_app_data
+            else Path.home() / "AppData" / "Roaming"
+        )
+        return base_dir / APPLICATION_CONFIG_DIR_NAME
+
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    base_dir = Path(xdg_config_home).expanduser() if xdg_config_home else Path.home() / ".config"
+    return base_dir / APPLICATION_CONFIG_DIR_NAME
+
+
+def legacy_frozen_preference_paths() -> tuple[Path, ...]:
+    """返回旧版打包程序可能读取过的外置配置路径。"""
+
+    if not is_frozen_app():
+        return ()
+    candidates = [frozen_app_sibling_dir() / "preference.json"]
+    candidates.extend(root / "preference.json" for root in frozen_resource_roots())
+    return _unique_paths(candidates)
 
 
 def frozen_resource_roots() -> tuple[Path, ...]:

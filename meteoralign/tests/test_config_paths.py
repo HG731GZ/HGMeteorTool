@@ -48,24 +48,33 @@ def test_star_color_mag_limit_is_loaded_from_preference(tmp_path: Path) -> None:
     assert load_star_map_ui_config(config_path).star_color_mag_limit == 5.25
 
 
-def test_default_config_path_uses_windows_exe_sibling(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_default_config_path_uses_windows_roaming_app_data(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(sys, "executable", "/release/HoshinoPanoAssistant/HoshinoPanoAssistant.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
 
-    assert default_config_path() == Path("/release/HoshinoPanoAssistant") / "preference.json"
+    assert default_config_path() == tmp_path / "Roaming" / "HoshinoPanoAssistant" / "preference.json"
 
 
-def test_default_config_path_uses_macos_app_sibling(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_default_config_path_uses_macos_application_support(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setattr(
         sys,
         "executable",
         "/Applications/HoshinoPanoAssistant.app/Contents/MacOS/HoshinoPanoAssistant",
     )
 
-    assert default_config_path() == Path("/Applications") / "preference.json"
+    assert default_config_path() == (
+        tmp_path
+        / "home"
+        / "Library"
+        / "Application Support"
+        / "HoshinoPanoAssistant"
+        / "preference.json"
+    )
 
 
 def test_runtime_catalog_dir_prefers_frozen_executable_sibling_catalog(

@@ -25,7 +25,12 @@ from ..catalog_download import ensure_catalogs_ready_or_handle
 from ..catalog import load_constellation_catalog, load_default_catalog
 from ..camera_calibration import CameraCalibrationProfile
 from ..config import StarMapUiConfig, load_star_map_ui_config
-from ..preference_manager import ensure_preference_file, recent_import_directory, remember_import_path
+from ..preference_manager import (
+    default_preference_path,
+    ensure_preference_file,
+    recent_import_directory,
+    remember_import_path,
+)
 from ..runtime_paths import runtime_icon_path
 from ..image_preview import ImagePreview
 from ..adjacent_framing_worker import AdjacentFramingWorker
@@ -226,7 +231,7 @@ class MainWindow(
     def _notify_preferences_saved(self, _ui_config: StarMapUiConfig) -> None:
         """提示配置已经写入磁盘。"""
 
-        self.ui.statusbar.showMessage("软件参数已保存到 preference.json。", 5000)
+        self.ui.statusbar.showMessage(f"软件参数已保存到 {default_preference_path()}。", 8000)
 
     def _show_preferences_dialog(self) -> None:
         """显示单实例非模态软件选项窗口，并将其提到前台。"""

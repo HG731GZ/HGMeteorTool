@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QColorDialog, QMessageBox, QWidget
 
 from ..config import StarMapUiConfig, load_star_map_ui_config
 from ..meteor_showers import METEOR_SHOWER_BY_ID
-from ..preference_manager import update_preference_values
+from ..preference_manager import default_preference_path, update_preference_values
 from ..ui.ui_preferences_page import Ui_PreferencesPage
 from .app_widgets import AppWidgetMixin
 from .meteor_shower_selection_dialog import MeteorShowerSelectionDialog
@@ -573,7 +573,12 @@ class PreferencesPage(QWidget, AppWidgetMixin):
         if values is None:
             return
         if not update_preference_values(values, path=self._preference_path):
-            QMessageBox.critical(self, "保存参数失败", "无法写入 preference.json，请检查配置目录写入权限。")
+            preference_path = self._preference_path or default_preference_path()
+            QMessageBox.critical(
+                self,
+                "保存参数失败",
+                f"无法写入配置文件：\n{preference_path}\n\n请检查该用户配置目录的写入权限。",
+            )
             return
 
         config = load_star_map_ui_config(self._preference_path)
