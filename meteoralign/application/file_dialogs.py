@@ -148,9 +148,44 @@ def get_multiple_open_file_names(
     )
 
 
+def get_save_file_name(
+    parent,
+    caption: str,
+    directory: str,
+    file_filter: str,
+    *,
+    default_suffix: str = "",
+    platform_name: str | None = None,
+) -> tuple[str, str]:
+    """显示保存对话框；macOS 使用与项目其他入口一致的 Qt 对话框。"""
+
+    resolved_platform = platform_name or sys.platform
+    options = multiple_file_dialog_options(platform_name=resolved_platform)
+    if resolved_platform != "darwin":
+        return QFileDialog.getSaveFileName(
+            parent,
+            caption,
+            directory,
+            file_filter,
+            options=options,
+        )
+
+    dialog = QFileDialog(parent, caption, directory, file_filter)
+    dialog.setOptions(options)
+    dialog.setAcceptMode(QFileDialog.AcceptSave)
+    dialog.setFileMode(QFileDialog.AnyFile)
+    if default_suffix:
+        dialog.setDefaultSuffix(default_suffix.lstrip("."))
+    if dialog.exec_() != QFileDialog.Accepted:
+        return "", dialog.selectedNameFilter()
+    selected_paths = dialog.selectedFiles()
+    return (selected_paths[0] if selected_paths else ""), dialog.selectedNameFilter()
+
+
 __all__ = [
     "get_open_file_name",
     "get_multiple_open_file_names",
+    "get_save_file_name",
     "multiple_file_dialog_options",
     "supported_suffixes_from_name_filter",
 ]

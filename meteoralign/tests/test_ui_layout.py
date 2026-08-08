@@ -75,6 +75,28 @@ def test_projection_model_controls_include_stereographic() -> None:
     window.close()
 
 
+def test_star_matching_page_exposes_pixinsight_xisf_export_controls() -> None:
+    """XISF 导出档位和按钮必须来自 Designer 生成的主界面。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    assert [
+        ui.comboBoxXisfControlPointMode.itemText(index)
+        for index in range(ui.comboBoxXisfControlPointMode.count())
+    ] == [
+        "快速（推荐，约 634 点）",
+        "精简（约 298 点）",
+        "高精度（约 2034 点，较慢）",
+    ]
+    assert ui.pushButtonExportXisf.text() == "导出 XISF"
+    assert not ui.pushButtonExportXisf.isEnabled()
+
+    window.close()
+
+
 def test_mosaic_repair_mode_controls_default_to_smart() -> None:
     """单张与批处理导出都应提供三档修复模式，并默认选择智能。"""
 

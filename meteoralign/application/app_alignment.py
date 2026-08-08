@@ -823,6 +823,8 @@ class AlignmentMixin:
             self.ui.checkBoxShowSkyMask.blockSignals(was_blocked)
         self.ui.pushButtonAutoMatchFieldStars.setEnabled(has_alignment and has_formal_pair_count)
         self.ui.pushButtonExportSourceModel.setEnabled(has_export_model)
+        if hasattr(self, "_update_xisf_export_control"):
+            self._update_xisf_export_control()
         self._update_camera_profile_controls()
         if not has_alignment and self.ui.checkBoxSyncReferenceAndRealView.isChecked():
             self.ui.checkBoxSyncReferenceAndRealView.blockSignals(True)

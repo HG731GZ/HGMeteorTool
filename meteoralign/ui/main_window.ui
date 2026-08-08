@@ -1885,6 +1885,12 @@
                    </property>
                    <item>
                     <widget class="QPushButton" name="pushButtonImportAdjacentImage">
+                     <property name="minimumSize">
+                      <size>
+                       <width>110</width>
+                       <height>0</height>
+                      </size>
+                     </property>
                      <property name="text">
                       <string>导入参考图像</string>
                      </property>
@@ -1892,6 +1898,12 @@
                    </item>
                    <item>
                     <widget class="QPushButton" name="pushButtonCalculateAdjacentFraming">
+                     <property name="minimumSize">
+                      <size>
+                       <width>110</width>
+                       <height>0</height>
+                      </size>
+                     </property>
                      <property name="enabled">
                       <bool>false</bool>
                      </property>
@@ -2020,6 +2032,35 @@
                   </item>
                  </widget>
                 </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="labelXisfControlPointMode">
+                  <property name="text">
+                   <string>XISF 控制点</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QComboBox" name="comboBoxXisfControlPointMode">
+                  <property name="toolTip">
+                   <string>控制 PixInsight 样条解算的采样密度；快速模式兼顾精度与打开速度</string>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>快速（推荐，约 634 点）</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>精简（约 298 点）</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>高精度（约 2034 点，较慢）</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
                </layout>
               </item>
               <item>
@@ -2028,6 +2069,19 @@
                  <widget class="QPushButton" name="pushButtonExportSourceModel">
                   <property name="text">
                    <string>导出映射</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="pushButtonExportXisf">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="toolTip">
+                   <string>保留原图位深，导出带 PixInsight ICRS/ZEA 样条天文解算的 XISF</string>
+                  </property>
+                  <property name="text">
+                   <string>导出 XISF</string>
                   </property>
                  </widget>
                 </item>

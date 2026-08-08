@@ -5,6 +5,7 @@ from .app_source_model_export import SourceModelExportMixin
 from .app_star_pair_json_task import StarPairJsonTaskMixin
 from .app_star_pair_reference_payload import StarPairReferencePayloadMixin
 from .app_star_pair_session import StarPairSessionMixin
+from .app_xisf_export import XisfExportMixin
 from ..star_pair_store import StarPairStore
 
 
@@ -13,6 +14,7 @@ class StarPairIOMixin(
     StarPairReferencePayloadMixin,
     StarPairSessionMixin,
     SourceModelExportMixin,
+    XisfExportMixin,
     ReferenceJsonIOMixin,
 ):
     """星对数据导入导出 Mixin：组合会话、源模型和参考 JSON 流程。"""

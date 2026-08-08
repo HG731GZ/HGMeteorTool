@@ -366,6 +366,9 @@ class MainWindow(
         self._json_import_thread: object | None = None
         self._json_import_worker: QObject | None = None
         self._json_import_progress: QProgressDialog | None = None
+        self._xisf_export_thread: object | None = None
+        self._xisf_export_worker: QObject | None = None
+        self._xisf_export_progress: QProgressDialog | None = None
         self._adjacent_framing_thread: object | None = None
         self._adjacent_framing_worker: AdjacentFramingWorker | None = None
         self._adjacent_framing_progress: QProgressDialog | None = None
@@ -578,6 +581,7 @@ class MainWindow(
         self.ui.comboBoxAutoMatchConstraintMode.currentIndexChanged.connect(self._update_auto_match_controls)
         self.ui.pushButtonAutoMatchFieldStars.clicked.connect(self.auto_match_field_stars)
         self.ui.pushButtonExportSourceModel.clicked.connect(self.export_source_model_json)
+        self.ui.pushButtonExportXisf.clicked.connect(self.export_current_image_xisf)
         self.ui.tabWidgetMain.currentChanged.connect(self._handle_tab_changed)
         self.ui.tabWidgetMain.currentChanged.connect(lambda _index: self.schedule_mosaic_render())
         self.ui.tableWidgetStarPairs.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -633,6 +637,14 @@ class MainWindow(
         )
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if getattr(self, "_xisf_export_thread", None) is not None:
+            QMessageBox.information(
+                self,
+                "正在导出 XISF",
+                "XISF 仍在后台写入，请等待完成后再关闭窗口。",
+            )
+            event.ignore()
+            return
         if getattr(self, "_low_frequency_thread", None) is not None:
             QMessageBox.information(
                 self,
