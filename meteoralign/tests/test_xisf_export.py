@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -34,14 +35,18 @@ class _FakeControl:
 
 
 class _XisfControlHarness(XisfExportMixin):
-    def __init__(self) -> None:
+    def __init__(self, image_path: Path, width: int = 16, height: int = 12) -> None:
         self.ui = SimpleNamespace(
             pushButtonExportXisf=_FakeControl(),
             comboBoxXisfControlPointMode=_FakeControl(),
         )
-        self.current_image_preview = object()
-        self._source_astrometric_model = object()
-        self._xisf_exported_source_model = None
+        self.current_image_preview = SimpleNamespace(
+            path=image_path,
+            original_width=width,
+            original_height=height,
+        )
+        self._xisf_source_model_cache_key = None
+        self._xisf_source_model_cache = None
         self._xisf_export_thread = None
 
 
@@ -88,6 +93,19 @@ def _star_pairs(model: FrameAstrometricModel) -> list[dict[str, float]]:
     ]
 
 
+def _write_model_json(path: Path, image_path: Path, model: FrameAstrometricModel) -> None:
+    payload = model.to_json_payload(
+        source_image={
+            "file_name": image_path.name,
+            "file_stem": image_path.stem,
+            "original_width_px": model.image_width_px,
+            "original_height_px": model.image_height_px,
+        },
+        fit_pairs=_star_pairs(model),
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_export_pixinsight_xisf_preserves_uint16_and_writes_solution(tmp_path: Path) -> None:
     width, height = 16, 12
     model = _rectilinear_model(width, height)
@@ -128,27 +146,36 @@ def test_existing_equisolid_model_extends_fast_grid_to_all_rectangle_corners() -
     assert max_radius < 360.0 / np.pi
 
 
-def test_xisf_button_requires_current_model_to_be_exported() -> None:
-    harness = _XisfControlHarness()
+def test_xisf_button_accepts_existing_valid_model_json(tmp_path: Path) -> None:
+    image_path = tmp_path / "frame.tif"
+    model_path = tmp_path / "frame_model.json"
+    model = _rectilinear_model(16, 12)
+    _write_model_json(model_path, image_path, model)
+    harness = _XisfControlHarness(image_path)
 
     harness._update_xisf_export_control()
-    assert not harness.ui.pushButtonExportXisf.enabled
-    assert harness.ui.pushButtonExportXisf.text == "导出XISF(须先导出映射)"
-
-    exported_model = harness._source_astrometric_model
-    harness._mark_current_source_model_exported_for_xisf(Path("frame_model.json"))
-    assert harness._xisf_exported_source_model is exported_model
     assert harness.ui.pushButtonExportXisf.enabled
     assert harness.ui.pushButtonExportXisf.text == "导出 XISF"
 
-    harness._source_astrometric_model = object()
+    model_path.write_text("{损坏的 JSON", encoding="utf-8")
     harness._update_xisf_export_control()
     assert not harness.ui.pushButtonExportXisf.enabled
     assert harness.ui.pushButtonExportXisf.text == "导出XISF(须先导出映射)"
 
 
-def test_programmatic_xisf_export_cannot_bypass_mapping_gate(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    harness = _XisfControlHarness()
+def test_model_json_for_another_image_does_not_unlock_xisf(tmp_path: Path) -> None:
+    image_path = tmp_path / "frame.tif"
+    model = _rectilinear_model(16, 12)
+    _write_model_json(tmp_path / "frame_model.json", tmp_path / "other.tif", model)
+    harness = _XisfControlHarness(image_path)
+
+    harness._update_xisf_export_control()
+
+    assert not harness.ui.pushButtonExportXisf.enabled
+
+
+def test_programmatic_xisf_export_cannot_bypass_mapping_gate(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    harness = _XisfControlHarness(tmp_path / "frame.tif")
     dialogs: list[tuple[str, str]] = []
     monkeypatch.setattr(
         "meteoralign.application.app_xisf_export.QMessageBox.information",
@@ -160,6 +187,6 @@ def test_programmatic_xisf_export_cannot_bypass_mapping_gate(monkeypatch) -> Non
     assert dialogs == [
         (
             "须先导出映射",
-            "请先点击“导出映射”，保存当前版本的源图映射后再导出 XISF。",
+            "当前图片旁没有有效的 model.json。请先点击“导出映射”，或检查已有映射文件。",
         )
     ]

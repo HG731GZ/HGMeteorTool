@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -8,12 +10,24 @@ from PyQt5.QtWidgets import QMessageBox, QProgressDialog
 
 from ..frame_astrometry import FrameAstrometricModel
 from ..qt_tasks import create_progress_dialog, start_qt_worker_task
-from ..xisf_export import XISF_EXPORT_MODES, XisfExportResult, export_pixinsight_xisf
+from ..xisf_export import (
+    XISF_EXPORT_MODES,
+    XisfExportResult,
+    export_pixinsight_xisf,
+    validate_star_pairs,
+)
 from .file_dialogs import get_save_file_name
 
 
 XISF_FILE_FILTER = "PixInsight XISF (*.xisf)"
 _XISF_MODE_ORDER = ("fast", "lite", "high")
+
+
+@dataclass(frozen=True)
+class ValidatedXisfSourceModel:
+    json_path: Path
+    model: FrameAstrometricModel
+    star_pairs: tuple[dict[str, object], ...]
 
 
 class XisfExportWorker(QObject):
@@ -62,7 +76,8 @@ class XisfExportMixin:
     _xisf_export_thread: object | None
     _xisf_export_worker: object | None
     _xisf_export_progress: QProgressDialog | None
-    _xisf_exported_source_model: object | None
+    _xisf_source_model_cache_key: object | None
+    _xisf_source_model_cache: ValidatedXisfSourceModel | None
 
     def _selected_xisf_mode(self) -> str:
         combo = self.ui.comboBoxXisfControlPointMode
@@ -77,17 +92,84 @@ class XisfExportMixin:
         image_path = Path(self.current_image_preview.path).expanduser().resolve()
         return image_path.with_name(f"{image_path.stem}_ICRS_{mode}.xisf")
 
+    def _current_xisf_source_model_path(self) -> Path | None:
+        preview = getattr(self, "current_image_preview", None)
+        if preview is None:
+            return None
+        image_path = Path(preview.path).expanduser().resolve()
+        path_builder = getattr(self, "_source_model_path_for_image", None)
+        if callable(path_builder):
+            return Path(path_builder(image_path)).expanduser().resolve()
+        return image_path.with_name(f"{image_path.stem}_model.json")
+
+    def _validated_source_model_json_for_xisf(self) -> ValidatedXisfSourceModel | None:
+        """返回当前图片旁可用于 XISF 的有效 model.json；结果按文件状态缓存。"""
+
+        preview = getattr(self, "current_image_preview", None)
+        model_path = self._current_xisf_source_model_path()
+        if preview is None or model_path is None or not model_path.is_file():
+            return None
+        image_path = Path(preview.path).expanduser().resolve()
+        try:
+            stat = model_path.stat()
+            expected_width = int(preview.original_width)
+            expected_height = int(preview.original_height)
+        except (OSError, AttributeError, TypeError, ValueError):
+            return None
+        cache_key = (
+            image_path,
+            model_path,
+            int(stat.st_mtime_ns),
+            int(stat.st_size),
+            expected_width,
+            expected_height,
+        )
+        if getattr(self, "_xisf_source_model_cache_key", None) == cache_key:
+            return getattr(self, "_xisf_source_model_cache", None)
+
+        self._xisf_source_model_cache_key = cache_key
+        self._xisf_source_model_cache = None
+        try:
+            payload = json.loads(model_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return None
+            model = FrameAstrometricModel.from_json_payload(payload)
+            if (model.image_width_px, model.image_height_px) != (
+                expected_width,
+                expected_height,
+            ):
+                return None
+            source_image = payload.get("source_image")
+            if not isinstance(source_image, dict):
+                return None
+            recorded_stem = str(source_image.get("file_stem", "")).strip()
+            if not recorded_stem:
+                recorded_name = str(source_image.get("file_name", "")).strip()
+                recorded_stem = Path(recorded_name).stem if recorded_name else ""
+            if not recorded_stem or recorded_stem.casefold() != image_path.stem.casefold():
+                return None
+            pair_payload = payload.get("fit_pairs")
+            if not isinstance(pair_payload, list):
+                return None
+            star_pairs = tuple(dict(pair) for pair in pair_payload if isinstance(pair, dict))
+            validate_star_pairs(model, star_pairs)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return None
+
+        result = ValidatedXisfSourceModel(
+            json_path=model_path,
+            model=model,
+            star_pairs=star_pairs,
+        )
+        self._xisf_source_model_cache = result
+        return result
+
     def _update_xisf_export_control(self) -> None:
         button = getattr(self.ui, "pushButtonExportXisf", None)
         combo = getattr(self.ui, "comboBoxXisfControlPointMode", None)
         if button is None or combo is None:
             return
-        current_model = getattr(self, "_source_astrometric_model", None)
-        mapping_exported = (
-            getattr(self, "current_image_preview", None) is not None
-            and current_model is not None
-            and getattr(self, "_xisf_exported_source_model", None) is current_model
-        )
+        mapping_exported = self._validated_source_model_json_for_xisf() is not None
         idle = getattr(self, "_xisf_export_thread", None) is None
         button.setEnabled(mapping_exported and idle)
         combo.setEnabled(idle)
@@ -96,24 +178,17 @@ class XisfExportMixin:
             button.setToolTip("正在后台写入 XISF，请等待完成")
         elif not mapping_exported:
             button.setText("导出XISF(须先导出映射)")
-            button.setToolTip("请先点击上方“导出映射”，保存当前版本的源图映射")
+            button.setToolTip("当前图片旁需要有效的 model.json；没有时请先点击上方“导出映射”")
         else:
             button.setText("导出 XISF")
             button.setToolTip("保留原图位深，导出带 PixInsight ICRS/ZEA 样条天文解算的 XISF")
 
-    def _mark_current_source_model_exported_for_xisf(self, _json_path: Path) -> None:
-        """记录当前模型已成功落盘；模型一旦重新求解，身份变化会自动失效。"""
+    def _handle_source_model_written_for_xisf(self, _json_path: Path) -> None:
+        """映射写入后清除校验缓存并立即刷新 XISF 按钮。"""
 
-        self._xisf_exported_source_model = getattr(self, "_source_astrometric_model", None)
+        self._xisf_source_model_cache_key = None
+        self._xisf_source_model_cache = None
         self._update_xisf_export_control()
-
-    def _current_source_model_was_exported_for_xisf(self) -> bool:
-        current_model = getattr(self, "_source_astrometric_model", None)
-        return (
-            getattr(self, "current_image_preview", None) is not None
-            and current_model is not None
-            and getattr(self, "_xisf_exported_source_model", None) is current_model
-        )
 
     def export_current_image_xisf(self) -> None:
         if self._xisf_export_thread is not None:
@@ -122,11 +197,12 @@ class XisfExportMixin:
         if self.current_image_preview is None:
             QMessageBox.information(self, "尚未导入图像", "请先导入并解析真实图像。")
             return
-        if not self._current_source_model_was_exported_for_xisf():
+        validated_model = self._validated_source_model_json_for_xisf()
+        if validated_model is None:
             QMessageBox.information(
                 self,
                 "须先导出映射",
-                "请先点击“导出映射”，保存当前版本的源图映射后再导出 XISF。",
+                "当前图片旁没有有效的 model.json。请先点击“导出映射”，或检查已有映射文件。",
             )
             self._update_xisf_export_control()
             return
@@ -146,18 +222,6 @@ class XisfExportMixin:
         if output_path.suffix.lower() != ".xisf":
             output_path = output_path.with_suffix(".xisf")
 
-        try:
-            model_payload = self._build_source_model_payload(output_path)
-            model = FrameAstrometricModel.from_json_payload(model_payload)
-            pair_payload = model_payload.get("fit_pairs")
-            if not isinstance(pair_payload, list):
-                raise ValueError("当前天文模型没有可验证的星点匹配记录。")
-            star_pairs = [pair for pair in pair_payload if isinstance(pair, dict)]
-        except Exception as exc:  # noqa: BLE001 - 模型未就绪时应直接向用户说明原因。
-            self.ui.statusbar.showMessage(f"准备 XISF 导出失败: {exc}")
-            QMessageBox.critical(self, "无法导出 XISF", str(exc))
-            return
-
         image_path = Path(self.current_image_preview.path).expanduser().resolve()
         progress = create_progress_dialog(
             self,
@@ -172,8 +236,8 @@ class XisfExportMixin:
         worker = XisfExportWorker(
             image_path=image_path,
             output_path=output_path,
-            model=model,
-            star_pairs=star_pairs,
+            model=validated_model.model,
+            star_pairs=validated_model.star_pairs,
             mode=mode,
         )
         task = start_qt_worker_task(
@@ -231,4 +295,9 @@ class XisfExportMixin:
         self._update_xisf_export_control()
 
 
-__all__ = ["XISF_FILE_FILTER", "XisfExportMixin", "XisfExportWorker"]
+__all__ = [
+    "ValidatedXisfSourceModel",
+    "XISF_FILE_FILTER",
+    "XisfExportMixin",
+    "XisfExportWorker",
+]

@@ -2099,7 +2099,7 @@
                  <bool>false</bool>
                 </property>
                 <property name="toolTip">
-                 <string>请先导出当前源图映射，再导出 XISF</string>
+                 <string>当前图片旁需要有效的 model.json；没有时请先导出映射</string>
                 </property>
                 <property name="text">
                  <string>导出XISF(须先导出映射)</string>

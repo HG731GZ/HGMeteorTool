@@ -1899,7 +1899,7 @@ class Ui_MainWindow(object):
         self.comboBoxXisfControlPointMode.setItemText(0, _translate("MainWindow", "快速（PI 打开较快，约 634 点，推荐）"))
         self.comboBoxXisfControlPointMode.setItemText(1, _translate("MainWindow", "精简（PI 打开最快，约 298 点）"))
         self.comboBoxXisfControlPointMode.setItemText(2, _translate("MainWindow", "高精度（PI 打开较慢，约 2034 点）"))
-        self.pushButtonExportXisf.setToolTip(_translate("MainWindow", "请先导出当前源图映射，再导出 XISF"))
+        self.pushButtonExportXisf.setToolTip(_translate("MainWindow", "当前图片旁需要有效的 model.json；没有时请先导出映射"))
         self.pushButtonExportXisf.setText(_translate("MainWindow", "导出XISF(须先导出映射)"))
         self.groupBoxReferenceAlignment.setTitle(_translate("MainWindow", "自动配准辅助"))
         self.labelAlignmentTransformStatus.setText(_translate("MainWindow", "至少匹配 2 颗星后可自动匹配和双击聚焦"))

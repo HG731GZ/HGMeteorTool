@@ -52,7 +52,7 @@ class _SourceModelWriteHarness(SourceModelExportMixin):
     def _confirm_overwrite_if_existing_has_more_pairs(self, *args, **kwargs) -> bool:  # type: ignore[no-untyped-def]
         return True
 
-    def _mark_current_source_model_exported_for_xisf(self, json_path: Path) -> None:
+    def _handle_source_model_written_for_xisf(self, json_path: Path) -> None:
         self.exported_for_xisf.append(json_path)
 
 
@@ -98,7 +98,7 @@ def test_export_mapping_reports_star_pair_save_failure_separately(tmp_path: Path
     assert str(harness.model_path) in dialogs[0][1]
 
 
-def test_successful_mapping_write_unlocks_xisf_export(tmp_path: Path) -> None:
+def test_successful_mapping_write_refreshes_xisf_model_detection(tmp_path: Path) -> None:
     output_path = tmp_path / "frame_model.json"
     harness = _SourceModelWriteHarness(output_path)
 
