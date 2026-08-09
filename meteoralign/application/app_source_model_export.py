@@ -189,6 +189,8 @@ class SourceModelExportMixin:
             self.ui.statusbar.showMessage("已取消导出 xy→RA/Dec 映射 JSON。")
             return None
         json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        if hasattr(self, "_mark_current_source_model_exported_for_xisf"):
+            self._mark_current_source_model_exported_for_xisf(json_path)
         preloaded_to_mosaic = False
         if preload_to_mosaic and hasattr(self, "load_mosaic_model_json"):
             preloaded_to_mosaic = bool(self.load_mosaic_model_json(json_path, quiet=True))

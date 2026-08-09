@@ -373,6 +373,7 @@ class MainWindow(
         self._xisf_export_thread: object | None = None
         self._xisf_export_worker: QObject | None = None
         self._xisf_export_progress: QProgressDialog | None = None
+        self._xisf_exported_source_model: object | None = None
         self._adjacent_framing_thread: object | None = None
         self._adjacent_framing_worker: AdjacentFramingWorker | None = None
         self._adjacent_framing_progress: QProgressDialog | None = None

@@ -37,6 +37,25 @@ class _ExportHarness(SourceModelExportMixin):
         return self.star_pair_path, 8
 
 
+class _SourceModelWriteHarness(SourceModelExportMixin):
+    def __init__(self, output_path: Path) -> None:
+        self.current_image_preview = object()
+        self.output_path = output_path
+        self.exported_for_xisf: list[Path] = []
+
+    def _default_source_model_path(self) -> Path:
+        return self.output_path
+
+    def _build_source_model_payload(self, _json_path: Path) -> dict[str, object]:
+        return {"diagnostics": {"pair_count": 8, "rms_px": 0.42}}
+
+    def _confirm_overwrite_if_existing_has_more_pairs(self, *args, **kwargs) -> bool:  # type: ignore[no-untyped-def]
+        return True
+
+    def _mark_current_source_model_exported_for_xisf(self, json_path: Path) -> None:
+        self.exported_for_xisf.append(json_path)
+
+
 def test_export_mapping_also_saves_star_pair_json(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """点击导出映射后应顺带覆盖保存默认同名的星点匹配 JSON。"""
 
@@ -77,3 +96,14 @@ def test_export_mapping_reports_star_pair_save_failure_separately(tmp_path: Path
     assert "映射 JSON 已导出，但星点匹配 JSON 保存失败" in harness.ui.statusbar.messages[-1]
     assert dialogs[0][0] == "星点匹配 JSON 保存失败"
     assert str(harness.model_path) in dialogs[0][1]
+
+
+def test_successful_mapping_write_unlocks_xisf_export(tmp_path: Path) -> None:
+    output_path = tmp_path / "frame_model.json"
+    harness = _SourceModelWriteHarness(output_path)
+
+    result = harness._write_current_source_model(preload_to_mosaic=False)
+
+    assert result == (output_path, 8, 0.42, False)
+    assert output_path.is_file()
+    assert harness.exported_for_xisf == [output_path]

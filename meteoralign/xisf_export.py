@@ -16,9 +16,9 @@ from .native_image import load_native_image_array
 
 
 XISF_EXPORT_MODES: dict[str, tuple[int, str]] = {
-    "fast": (25, "快速（推荐，约 634 个控制点）"),
-    "lite": (17, "精简（约 298 个控制点）"),
-    "high": (45, "高精度（约 2034 个控制点，打开较慢）"),
+    "fast": (25, "PixInsight 打开较快，约 634 个控制点（推荐）"),
+    "lite": (17, "PixInsight 打开最快，约 298 个控制点"),
+    "high": (45, "PixInsight 打开较慢，约 2034 个控制点"),
 }
 
 PIXINSIGHT_ASTROMETRIC_PROPERTIES = (

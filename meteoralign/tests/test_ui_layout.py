@@ -87,11 +87,12 @@ def test_star_matching_page_exposes_pixinsight_xisf_export_controls() -> None:
         ui.comboBoxXisfControlPointMode.itemText(index)
         for index in range(ui.comboBoxXisfControlPointMode.count())
     ] == [
-        "快速（推荐，约 634 点）",
-        "精简（约 298 点）",
-        "高精度（约 2034 点，较慢）",
+        "快速（PI 打开较快，约 634 点，推荐）",
+        "精简（PI 打开最快，约 298 点）",
+        "高精度（PI 打开较慢，约 2034 点）",
     ]
-    assert ui.pushButtonExportXisf.text() == "导出 XISF"
+    assert "不是本程序导出处理时间" in ui.comboBoxXisfControlPointMode.toolTip()
+    assert ui.pushButtonExportXisf.text() == "导出XISF(须先导出映射)"
     assert not ui.pushButtonExportXisf.isEnabled()
     assert ui.groupBoxXisfExport.title() == "导出xisf"
     assert ui.comboBoxXisfControlPointMode.parent() is ui.groupBoxXisfExport

@@ -62,6 +62,7 @@ class XisfExportMixin:
     _xisf_export_thread: object | None
     _xisf_export_worker: object | None
     _xisf_export_progress: QProgressDialog | None
+    _xisf_exported_source_model: object | None
 
     def _selected_xisf_mode(self) -> str:
         combo = self.ui.comboBoxXisfControlPointMode
@@ -81,13 +82,38 @@ class XisfExportMixin:
         combo = getattr(self.ui, "comboBoxXisfControlPointMode", None)
         if button is None or combo is None:
             return
-        model_ready = (
+        current_model = getattr(self, "_source_astrometric_model", None)
+        mapping_exported = (
             getattr(self, "current_image_preview", None) is not None
-            and getattr(self, "_source_astrometric_model", None) is not None
+            and current_model is not None
+            and getattr(self, "_xisf_exported_source_model", None) is current_model
         )
         idle = getattr(self, "_xisf_export_thread", None) is None
-        button.setEnabled(model_ready and idle)
+        button.setEnabled(mapping_exported and idle)
         combo.setEnabled(idle)
+        if not idle:
+            button.setText("正在导出 XISF...")
+            button.setToolTip("正在后台写入 XISF，请等待完成")
+        elif not mapping_exported:
+            button.setText("导出XISF(须先导出映射)")
+            button.setToolTip("请先点击上方“导出映射”，保存当前版本的源图映射")
+        else:
+            button.setText("导出 XISF")
+            button.setToolTip("保留原图位深，导出带 PixInsight ICRS/ZEA 样条天文解算的 XISF")
+
+    def _mark_current_source_model_exported_for_xisf(self, _json_path: Path) -> None:
+        """记录当前模型已成功落盘；模型一旦重新求解，身份变化会自动失效。"""
+
+        self._xisf_exported_source_model = getattr(self, "_source_astrometric_model", None)
+        self._update_xisf_export_control()
+
+    def _current_source_model_was_exported_for_xisf(self) -> bool:
+        current_model = getattr(self, "_source_astrometric_model", None)
+        return (
+            getattr(self, "current_image_preview", None) is not None
+            and current_model is not None
+            and getattr(self, "_xisf_exported_source_model", None) is current_model
+        )
 
     def export_current_image_xisf(self) -> None:
         if self._xisf_export_thread is not None:
@@ -95,6 +121,14 @@ class XisfExportMixin:
             return
         if self.current_image_preview is None:
             QMessageBox.information(self, "尚未导入图像", "请先导入并解析真实图像。")
+            return
+        if not self._current_source_model_was_exported_for_xisf():
+            QMessageBox.information(
+                self,
+                "须先导出映射",
+                "请先点击“导出映射”，保存当前版本的源图映射后再导出 XISF。",
+            )
+            self._update_xisf_export_control()
             return
 
         mode = self._selected_xisf_mode()

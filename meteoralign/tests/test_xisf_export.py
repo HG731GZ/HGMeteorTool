@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import tifffile
@@ -13,6 +14,35 @@ from meteoralign.xisf_export import (
     export_pixinsight_xisf,
     verify_xisf_astrometric_solution,
 )
+from meteoralign.application.app_xisf_export import XisfExportMixin
+
+
+class _FakeControl:
+    def __init__(self) -> None:
+        self.enabled = True
+        self.text = ""
+        self.tooltip = ""
+
+    def setEnabled(self, enabled: bool) -> None:  # noqa: N802 - 模拟 Qt 接口。
+        self.enabled = bool(enabled)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - 模拟 Qt 接口。
+        self.text = text
+
+    def setToolTip(self, text: str) -> None:  # noqa: N802 - 模拟 Qt 接口。
+        self.tooltip = text
+
+
+class _XisfControlHarness(XisfExportMixin):
+    def __init__(self) -> None:
+        self.ui = SimpleNamespace(
+            pushButtonExportXisf=_FakeControl(),
+            comboBoxXisfControlPointMode=_FakeControl(),
+        )
+        self.current_image_preview = object()
+        self._source_astrometric_model = object()
+        self._xisf_exported_source_model = None
+        self._xisf_export_thread = None
 
 
 def _rectilinear_model(width: int, height: int) -> FrameAstrometricModel:
@@ -96,3 +126,40 @@ def test_existing_equisolid_model_extends_fast_grid_to_all_rectangle_corners() -
     assert len(pixels) == 634
     assert np.all(np.isfinite(world))
     assert max_radius < 360.0 / np.pi
+
+
+def test_xisf_button_requires_current_model_to_be_exported() -> None:
+    harness = _XisfControlHarness()
+
+    harness._update_xisf_export_control()
+    assert not harness.ui.pushButtonExportXisf.enabled
+    assert harness.ui.pushButtonExportXisf.text == "导出XISF(须先导出映射)"
+
+    exported_model = harness._source_astrometric_model
+    harness._mark_current_source_model_exported_for_xisf(Path("frame_model.json"))
+    assert harness._xisf_exported_source_model is exported_model
+    assert harness.ui.pushButtonExportXisf.enabled
+    assert harness.ui.pushButtonExportXisf.text == "导出 XISF"
+
+    harness._source_astrometric_model = object()
+    harness._update_xisf_export_control()
+    assert not harness.ui.pushButtonExportXisf.enabled
+    assert harness.ui.pushButtonExportXisf.text == "导出XISF(须先导出映射)"
+
+
+def test_programmatic_xisf_export_cannot_bypass_mapping_gate(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    harness = _XisfControlHarness()
+    dialogs: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "meteoralign.application.app_xisf_export.QMessageBox.information",
+        lambda _parent, title, message: dialogs.append((title, message)),
+    )
+
+    harness.export_current_image_xisf()
+
+    assert dialogs == [
+        (
+            "须先导出映射",
+            "请先点击“导出映射”，保存当前版本的源图映射后再导出 XISF。",
+        )
+    ]

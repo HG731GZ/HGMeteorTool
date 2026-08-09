@@ -2072,21 +2072,21 @@
                 <item row="0" column="1">
                  <widget class="QComboBox" name="comboBoxXisfControlPointMode">
                   <property name="toolTip">
-                   <string>控制 PixInsight 样条解算的采样密度；快速模式兼顾精度与打开速度</string>
+                   <string>以下快慢均指在 PixInsight 中打开 XISF 的耗时，不是本程序导出处理时间</string>
                   </property>
                   <item>
                    <property name="text">
-                    <string>快速（推荐，约 634 点）</string>
+                    <string>快速（PI 打开较快，约 634 点，推荐）</string>
                    </property>
                   </item>
                   <item>
                    <property name="text">
-                    <string>精简（约 298 点）</string>
+                    <string>精简（PI 打开最快，约 298 点）</string>
                    </property>
                   </item>
                   <item>
                    <property name="text">
-                    <string>高精度（约 2034 点，较慢）</string>
+                    <string>高精度（PI 打开较慢，约 2034 点）</string>
                    </property>
                   </item>
                  </widget>
@@ -2099,10 +2099,10 @@
                  <bool>false</bool>
                 </property>
                 <property name="toolTip">
-                 <string>保留原图位深，导出带 PixInsight ICRS/ZEA 样条天文解算的 XISF</string>
+                 <string>请先导出当前源图映射，再导出 XISF</string>
                 </property>
                 <property name="text">
-                 <string>导出 XISF</string>
+                 <string>导出XISF(须先导出映射)</string>
                 </property>
                </widget>
               </item>
