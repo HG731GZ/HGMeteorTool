@@ -9,13 +9,15 @@ from types import SimpleNamespace
 # 让无显示服务器的 CI 也能创建 Qt 窗口；用户桌面运行不受此测试环境变量影响。
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtCore import QEvent, QFile, Qt
-from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtCore import QEvent, QFile, QPoint, QPointF, Qt
+from PyQt5.QtGui import QFont, QKeySequence, QWheelEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QFormLayout,
+    QGraphicsScene,
+    QGraphicsView,
     QHeaderView,
     QMainWindow,
     QSizePolicy,
@@ -28,6 +30,7 @@ from meteoralign.application.app_mosaic import MosaicProjectionMixin, MosaicSour
 from meteoralign.application.app_rendering import RenderingMixin
 from meteoralign.application.app_sequence_table_preview import SequenceTablePreviewMixin
 from meteoralign.application.app_star_pair_table_groups import StarPairTableGroupsMixin
+from meteoralign.application.app_view_controls import ViewControlsMixin
 from meteoralign.application.main_window import (
     MainWindow,
     apply_platform_layout,
@@ -259,6 +262,94 @@ def test_preview_navigation_buttons_use_arrow_key_shortcuts() -> None:
     ui.toolButtonImageSequenceNext.setEnabled(False)
     QTest.keyClick(ui.imageSequenceView, Qt.Key_Right)
     assert clicks["sequence_next"] == 1
+    window.close()
+
+
+class _PreviewGestureHarness(ViewControlsMixin):
+    def __init__(self, reference_view: QGraphicsView, real_view: QGraphicsView) -> None:
+        self.ui = SimpleNamespace(
+            referenceImageView=reference_view,
+            realImageView=real_view,
+        )
+        self.ui_config = SimpleNamespace(wheel_zoom_enabled=True)
+        self._syncing_reference_real_views = False
+        self.synced_views: list[QGraphicsView] = []
+
+    def _sync_reference_real_view_from(self, source_view, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        self.synced_views.append(source_view)
+
+    def _graphics_view_max_scale(self, view: QGraphicsView) -> None:
+        return None
+
+    def _update_live_star_map_zoom_scale(self, view: QGraphicsView) -> None:
+        return
+
+
+def test_star_matching_previews_use_touchpad_pixel_scroll_for_two_finger_pan() -> None:
+    """触控板像素滚动应平移预览，传统滚轮仍用于缩放。"""
+
+    app = QApplication.instance() or QApplication([])
+    reference_view = QGraphicsView()
+    real_view = QGraphicsView()
+    scene = QGraphicsScene(reference_view)
+    scene.setSceneRect(0.0, 0.0, 1600.0, 1200.0)
+    reference_view.setScene(scene)
+    reference_view.resize(320, 240)
+    reference_view.show()
+    app.processEvents()
+    reference_view.centerOn(800.0, 600.0)
+    harness = _PreviewGestureHarness(reference_view, real_view)
+
+    horizontal_before = reference_view.horizontalScrollBar().value()
+    vertical_before = reference_view.verticalScrollBar().value()
+    scale_before = reference_view.transform().m11()
+    touchpad_event = QWheelEvent(
+        QPointF(reference_view.viewport().rect().center()),
+        QPointF(reference_view.viewport().mapToGlobal(reference_view.viewport().rect().center())),
+        QPoint(24, -36),
+        QPoint(0, -120),
+        Qt.NoButton,
+        Qt.NoModifier,
+        Qt.ScrollUpdate,
+        False,
+    )
+
+    assert harness._handle_graphics_view_wheel_zoom(reference_view, touchpad_event)
+    assert reference_view.horizontalScrollBar().value() == horizontal_before - 24
+    assert reference_view.verticalScrollBar().value() == vertical_before + 36
+    assert reference_view.transform().m11() == scale_before
+    assert harness.synced_views == [reference_view]
+
+    mouse_wheel_event = QWheelEvent(
+        QPointF(reference_view.viewport().rect().center()),
+        QPointF(reference_view.viewport().mapToGlobal(reference_view.viewport().rect().center())),
+        QPoint(),
+        QPoint(0, 120),
+        Qt.NoButton,
+        Qt.NoModifier,
+        Qt.ScrollUpdate,
+        False,
+    )
+    assert harness._handle_graphics_view_wheel_zoom(reference_view, mouse_wheel_event)
+    assert reference_view.transform().m11() > scale_before
+
+    reference_view.close()
+    real_view.close()
+
+
+def test_star_matching_preview_gesture_hints_come_from_designer_ui() -> None:
+    """两个预览的 Designer UI 都应说明鼠标与触控板操作。"""
+
+    app = QApplication.instance() or QApplication([])
+    window = QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+
+    for view in (ui.referenceImageView, ui.realImageView):
+        assert view.dragMode() == QGraphicsView.ScrollHandDrag
+        assert "触控板双指拖动" in view.toolTip()
+        assert "双指捏合" in view.toolTip()
+
     window.close()
 
 

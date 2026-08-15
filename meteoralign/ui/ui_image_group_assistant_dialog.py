@@ -14,9 +14,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_ImageGroupAssistantDialog(object):
     def setupUi(self, ImageGroupAssistantDialog):
         ImageGroupAssistantDialog.setObjectName("ImageGroupAssistantDialog")
-        ImageGroupAssistantDialog.resize(440, 560)
-        ImageGroupAssistantDialog.setMinimumSize(QtCore.QSize(250, 360))
-        ImageGroupAssistantDialog.setMaximumSize(QtCore.QSize(480, 16777215))
+        ImageGroupAssistantDialog.resize(520, 560)
+        ImageGroupAssistantDialog.setMinimumSize(QtCore.QSize(480, 360))
+        ImageGroupAssistantDialog.setMaximumSize(QtCore.QSize(640, 16777215))
         self.verticalLayoutImageGroupAssistant = QtWidgets.QVBoxLayout(ImageGroupAssistantDialog)
         self.verticalLayoutImageGroupAssistant.setObjectName("verticalLayoutImageGroupAssistant")
         self.checkBoxAutoSelectReference = QtWidgets.QCheckBox(ImageGroupAssistantDialog)
@@ -28,6 +28,7 @@ class Ui_ImageGroupAssistantDialog(object):
         self.labelImageGroupHint.setObjectName("labelImageGroupHint")
         self.verticalLayoutImageGroupAssistant.addWidget(self.labelImageGroupHint)
         self.tableWidgetImageGroup = QtWidgets.QTableWidget(ImageGroupAssistantDialog)
+        self.tableWidgetImageGroup.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.tableWidgetImageGroup.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tableWidgetImageGroup.setAlternatingRowColors(True)
         self.tableWidgetImageGroup.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)

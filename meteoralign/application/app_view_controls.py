@@ -415,10 +415,43 @@ class ViewControlsMixin:
         return bool(getattr(self.ui_config, "touchpad_pinch_zoom_enabled", True))
 
     def _handle_graphics_view_wheel_zoom(self, view: QGraphicsView, event) -> bool:  # type: ignore[no-untyped-def]
+        """区分触控板双指平移与传统鼠标滚轮缩放。"""
+
+        pixel_delta = event.pixelDelta()
+        supports_touchpad_pan = view in (self.ui.referenceImageView, self.ui.realImageView)
+        if (
+            supports_touchpad_pan
+            and not pixel_delta.isNull()
+            and not (event.modifiers() & Qt.ControlModifier)
+        ):
+            horizontal_delta = float(pixel_delta.x())
+            vertical_delta = float(pixel_delta.y())
+            if event.modifiers() & Qt.ShiftModifier and abs(horizontal_delta) <= 1e-6:
+                horizontal_delta = vertical_delta
+                vertical_delta = 0.0
+            self._apply_graphics_view_pan(view, horizontal_delta, vertical_delta)
+            event.accept()
+            return True
+
         if not self._wheel_zoom_enabled():
             return False
         self._apply_graphics_view_zoom(view, event.angleDelta().y())
         return True
+
+    def _apply_graphics_view_pan(
+        self,
+        view: QGraphicsView,
+        horizontal_delta: float,
+        vertical_delta: float,
+    ) -> None:
+        """按触控板像素增量平移预览，并保持参考图与真实图同步。"""
+
+        def apply_pan() -> None:
+            self._apply_scrollbar_wheel_delta(view.horizontalScrollBar(), horizontal_delta)
+            self._apply_scrollbar_wheel_delta(view.verticalScrollBar(), vertical_delta)
+
+        self._run_with_reference_real_sync_suspended(view, apply_pan)
+        self._sync_reference_real_view_from(view)
 
     def _apply_graphics_view_zoom(self, view: QGraphicsView, wheel_delta: int) -> None:
         factor = wheel_zoom_factor(wheel_delta, IMAGE_VIEW_ZOOM_IN_FACTOR, IMAGE_VIEW_ZOOM_OUT_FACTOR)

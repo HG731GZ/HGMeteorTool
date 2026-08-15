@@ -252,7 +252,7 @@ def test_image_group_dialog_marks_existing_outputs_green(tmp_path: Path) -> None
     # 主窗口启动后助手会先隐藏一段时间；隐藏状态不得用无效布局放大窗口。
     app.processEvents()
     assert not dialog.isVisible()
-    assert dialog.maximumWidth() == 480
+    assert dialog.maximumWidth() == 640
     dialog.show()
     app.processEvents()
     table = dialog.ui.tableWidgetImageGroup
@@ -288,10 +288,14 @@ def test_image_group_dialog_marks_existing_outputs_green(tmp_path: Path) -> None
     )
     assert table.columnWidth(IMAGE_GROUP_PREVIEW_COLUMN) == expected_preview_width
     assert table.cellWidget(0, IMAGE_GROUP_PREVIEW_COLUMN).width() == expected_preview_width
-    assert dialog.width() < 480
-    assert dialog.minimumWidth() == 250
+    assert dialog.width() < 640
+    assert dialog.minimumWidth() == 480
     assert dialog.maximumWidth() == dialog.width()
-    assert table.viewport().width() == sum(table.columnWidth(column) for column in range(5))
+    assert table.horizontalScrollBar().maximum() == 0
+    assert table.viewport().width() >= sum(table.columnWidth(column) for column in range(5))
+    preview_cell = table.visualRect(table.model().index(0, IMAGE_GROUP_PREVIEW_COLUMN))
+    assert preview_cell.right() < table.viewport().width()
+    assert table.cellWidget(0, IMAGE_GROUP_PREVIEW_COLUMN).isVisible()
     dialog.close()
 
 

@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QStyle,
     QTableWidgetItem,
     QWidget,
 )
@@ -94,16 +95,19 @@ class ImageGroupAssistantDialog(QDialog):
         QTimer.singleShot(0, self._fit_default_width_to_columns)
 
     def _fit_default_width_to_columns(self) -> None:
-        """按各列所需宽度收紧窗口，避免表格右侧出现空白。"""
+        """按各列所需宽度收紧窗口，并为垂直滚动条预留空间。"""
 
         table = self.ui.tableWidgetImageGroup
         layout = self.layout()
         if layout is not None:
             layout.activate()
-        window_chrome_width = max(0, self.width() - table.viewport().width())
-        fitted_width = sum(table.columnWidth(column) for column in range(table.columnCount()))
-        fitted_width += window_chrome_width
+        layout_and_window_width = max(0, self.width() - table.width())
+        table_frame_width = table.frameWidth() * 2
+        scroll_bar_extent = table.style().pixelMetric(QStyle.PM_ScrollBarExtent, None, table)
+        fitted_width = table.horizontalHeader().length()
+        fitted_width += layout_and_window_width + table_frame_width + scroll_bar_extent
         fitted_width = max(self.minimumWidth(), fitted_width)
+        fitted_width = min(self.maximumWidth(), fitted_width)
         self.setMaximumWidth(fitted_width)
         self.resize(fitted_width, self.height())
 

@@ -2286,6 +2286,9 @@
             </item>
             <item>
              <widget class="QGraphicsView" name="referenceImageView">
+              <property name="toolTip">
+               <string>鼠标拖动或触控板双指拖动可平移；鼠标滚轮或触控板双指捏合可缩放。</string>
+              </property>
               <property name="backgroundBrush">
                <brush brushstyle="SolidPattern">
                 <color alpha="255">
@@ -2378,6 +2381,9 @@
             </item>
             <item>
              <widget class="QGraphicsView" name="realImageView">
+              <property name="toolTip">
+               <string>鼠标拖动或触控板双指拖动可平移；鼠标滚轮或触控板双指捏合可缩放。</string>
+              </property>
               <property name="backgroundBrush">
                <brush brushstyle="SolidPattern">
                 <color alpha="255">
