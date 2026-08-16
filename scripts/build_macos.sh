@@ -60,8 +60,8 @@ codesign --verify --deep --strict "$APP_BUNDLE"
 
 mkdir -p "$RELEASE_DIR"
 rm -rf "$RELEASE_APP"
+rm -f "$RELEASE_DIR/preference.json"
 ditto "$APP_BUNDLE" "$RELEASE_APP"
-cp "$PROJECT_ROOT/preference.json" "$RELEASE_DIR/preference.json"
 
 codesign --verify --deep --strict "$RELEASE_APP"
 print "构建完成：$RELEASE_APP"
