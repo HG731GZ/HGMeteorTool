@@ -6,7 +6,7 @@ import re
 import sys
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QUrl, Qt
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QAbstractItemView, QFileDialog, QFileSystemModel, QShortcut
 
@@ -69,6 +69,38 @@ def _hide_unsupported_file_dialog_items(dialog: QFileDialog) -> None:
         file_system_model.setNameFilterDisables(False)
 
 
+def _add_macos_volume_shortcuts(
+    dialog: QFileDialog,
+    *,
+    volumes_directory: Path = Path("/Volumes"),
+) -> None:
+    """显式暴露 macOS 挂载点，避免 Qt 把隐藏的 /Volumes 从根目录过滤掉。"""
+
+    if not volumes_directory.is_dir():
+        return
+    try:
+        mounted_paths = sorted(
+            (path for path in volumes_directory.iterdir() if path.is_dir()),
+            key=lambda path: path.name.casefold(),
+        )
+    except OSError:
+        mounted_paths = []
+
+    sidebar_urls = list(dialog.sidebarUrls())
+    known_local_paths = {
+        str(Path(url.toLocalFile()))
+        for url in sidebar_urls
+        if url.isLocalFile() and url.toLocalFile()
+    }
+    for path in (volumes_directory, *mounted_paths):
+        path_text = str(path)
+        if path_text in known_local_paths:
+            continue
+        sidebar_urls.append(QUrl.fromLocalFile(path_text))
+        known_local_paths.add(path_text)
+    dialog.setSidebarUrls(sidebar_urls)
+
+
 def get_open_file_name(
     parent,
     caption: str,
@@ -99,6 +131,7 @@ def get_open_file_name(
     dialog.setAcceptMode(QFileDialog.AcceptOpen)
     dialog.setFileMode(QFileDialog.ExistingFile)
     _hide_unsupported_file_dialog_items(dialog)
+    _add_macos_volume_shortcuts(dialog)
     if dialog.exec_() != QFileDialog.Accepted:
         return "", dialog.selectedNameFilter()
     selected_paths = dialog.selectedFiles()
@@ -136,6 +169,7 @@ def get_multiple_open_file_names(
     dialog.setAcceptMode(QFileDialog.AcceptOpen)
     dialog.setFileMode(QFileDialog.ExistingFiles)
     _hide_unsupported_file_dialog_items(dialog)
+    _add_macos_volume_shortcuts(dialog)
     select_all_shortcut = QShortcut(QKeySequence("Meta+A"), dialog)
     select_all_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
     select_all_shortcut.activated.connect(lambda: _select_all_file_dialog_items(dialog))
@@ -174,6 +208,7 @@ def get_save_file_name(
     dialog.setOptions(options)
     dialog.setAcceptMode(QFileDialog.AcceptSave)
     dialog.setFileMode(QFileDialog.AnyFile)
+    _add_macos_volume_shortcuts(dialog)
     if default_suffix:
         dialog.setDefaultSuffix(default_suffix.lstrip("."))
     if dialog.exec_() != QFileDialog.Accepted:

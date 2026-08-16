@@ -12,6 +12,7 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QFileDialog, QTreeView
 
 from meteoralign.application.file_dialogs import (
+    _add_macos_volume_shortcuts,
     get_open_file_name,
     get_multiple_open_file_names,
     multiple_file_dialog_options,
@@ -48,6 +49,28 @@ def test_windows_keeps_native_multiple_file_dialog() -> None:
     options = multiple_file_dialog_options(platform_name="win32")
 
     assert not options & QFileDialog.DontUseNativeDialog
+
+
+def test_macos_qt_dialog_adds_volumes_and_mounted_disks_to_sidebar(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """即使 /Volumes 在根目录被隐藏，也应能从侧边栏进入挂载磁盘。"""
+
+    _application()
+    volumes_directory = tmp_path / "Volumes"
+    external_disk = volumes_directory / "External SSD"
+    external_disk.mkdir(parents=True)
+    (volumes_directory / "not-a-volume.txt").write_text("ignore", encoding="utf-8")
+    dialog = QFileDialog()
+
+    _add_macos_volume_shortcuts(dialog, volumes_directory=volumes_directory)
+
+    sidebar_paths = {
+        url.toLocalFile()
+        for url in dialog.sidebarUrls()
+        if url.isLocalFile()
+    }
+    assert str(volumes_directory) in sidebar_paths
+    assert str(external_disk) in sidebar_paths
+    assert str(volumes_directory / "not-a-volume.txt") not in sidebar_paths
 
 
 def test_name_filter_suffixes_are_extracted_case_insensitively() -> None:
