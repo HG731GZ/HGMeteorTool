@@ -9,7 +9,12 @@ from PyQt5.QtGui import QBrush, QColor, QImage, QPen, QPixmap, QTransform
 from PyQt5.QtWidgets import QGraphicsPixmapItem, QGraphicsRectItem, QGraphicsScene, QGraphicsView, QMenu
 
 from ..meteor_selection import MeteorBox
-from ..view_gestures import ViewZoomPolicy, native_gesture_zoom_factor
+from ..view_gestures import (
+    ViewZoomPolicy,
+    native_gesture_zoom_factor,
+    wheel_zoom_factor,
+)
+from .app_constants import IMAGE_VIEW_ZOOM_IN_FACTOR, IMAGE_VIEW_ZOOM_OUT_FACTOR
 
 
 class MeteorSelectionView(QGraphicsView):
@@ -28,6 +33,7 @@ class MeteorSelectionView(QGraphicsView):
         self._drawing_item: QGraphicsRectItem | None = None
         self._drawing_start: QPointF | None = None
         self._image_rect = QRectF()
+        self._wheel_zoom_enabled = True
         self._touchpad_pinch_zoom_enabled = True
         self._box_editing_enabled = True
         self._native_zoom_center: QPointF | None = None
@@ -42,9 +48,14 @@ class MeteorSelectionView(QGraphicsView):
         self.viewport().installEventFilter(self)
 
     def set_touchpad_pinch_zoom_enabled(self, enabled: bool) -> None:
-        """设置是否响应触控板双指捏合缩放。"""
+        """设置是否响应触控板双指拖动平移与捏合缩放。"""
 
         self._touchpad_pinch_zoom_enabled = bool(enabled)
+
+    def set_wheel_zoom_enabled(self, enabled: bool) -> None:
+        """设置是否响应传统鼠标滚轮缩放。"""
+
+        self._wheel_zoom_enabled = bool(enabled)
 
     def set_box_editing_enabled(self, enabled: bool) -> None:
         """设置是否允许通过 Ctrl 拖拽新增流星框。"""
@@ -143,11 +154,37 @@ class MeteorSelectionView(QGraphicsView):
         if self._image_rect.isEmpty():
             event.ignore()
             return
-        delta = event.angleDelta().y()
-        if delta == 0:
+
+        pixel_delta = event.pixelDelta()
+        if not pixel_delta.isNull():
+            if not self._touchpad_pinch_zoom_enabled:
+                event.ignore()
+                return
+            horizontal_delta = float(pixel_delta.x())
+            vertical_delta = float(pixel_delta.y())
+            if abs(horizontal_delta) <= 1e-6 and abs(vertical_delta) <= 1e-6:
+                event.ignore()
+                return
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - int(round(horizontal_delta))
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - int(round(vertical_delta))
+            )
+            event.accept()
+            return
+        elif self._wheel_zoom_enabled:
+            factor = wheel_zoom_factor(
+                event.angleDelta().y(),
+                IMAGE_VIEW_ZOOM_IN_FACTOR,
+                IMAGE_VIEW_ZOOM_OUT_FACTOR,
+            )
+        else:
+            factor = None
+
+        if factor is None:
             event.ignore()
             return
-        factor = 1.25 if delta > 0 else 0.8
         self._apply_zoom_factor(factor)
         event.accept()
 

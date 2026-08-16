@@ -192,6 +192,8 @@ class MainWindow(
         self.ui_config = ui_config
         self.renderer.ui_config = ui_config
         self._apply_ui_font_config(ui_config)
+        if hasattr(self, "_apply_meteor_selection_zoom_preferences"):
+            self._apply_meteor_selection_zoom_preferences()
 
         if hasattr(self, "_star_pick_circle_diameter_px"):
             self._star_pick_circle_diameter_px = min(

@@ -1763,6 +1763,7 @@ class Ui_MainWindow(object):
         self.pushButtonClearMeteorBoxes.setToolTip(_translate("MainWindow", "清除当前图像的所有流星框选。"))
         self.pushButtonClearMeteorBoxes.setText(_translate("MainWindow", "清除框选"))
         self.tabWidgetMain.setTabText(self.tabWidgetMain.indexOf(self.tabMeteorSelection), _translate("MainWindow", "框选流星"))
+        self.meteorSelectionView.setToolTip(_translate("MainWindow", "鼠标拖动或触控板双指拖动可平移；鼠标滚轮或触控板双指捏合可缩放。"))
         self.groupBoxObserver.setTitle(_translate("MainWindow", "观测信息"))
         self.labelObservationTime.setText(_translate("MainWindow", "拍摄时间"))
         self.dateTimeEditObservation.setDisplayFormat(_translate("MainWindow", "yyyy-MM-dd HH:mm:ss"))

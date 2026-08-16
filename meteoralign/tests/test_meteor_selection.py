@@ -9,8 +9,8 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np
-from PyQt5.QtCore import QEvent, QPointF, Qt
-from PyQt5.QtGui import QContextMenuEvent, QImage, QMouseEvent, QPalette
+from PyQt5.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt5.QtGui import QContextMenuEvent, QImage, QMouseEvent, QPalette, QWheelEvent
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMenu, QMessageBox
 
 from meteoralign.application import app_meteor_selection
@@ -167,6 +167,60 @@ def test_meteor_selection_view_supports_touchpad_pinch_zoom() -> None:
     scale_before = view.transform().m11()
     assert not view._handle_native_gesture(NativeZoomEvent(Qt.ZoomNativeGesture))
     assert view.transform().m11() == scale_before
+    view.close()
+
+
+def test_meteor_selection_view_separates_mouse_wheel_zoom_and_touchpad_pan_switches() -> None:
+    """双指拖动平移与传统滚轮缩放应分别服从触控板和鼠标开关。"""
+
+    app = _application()
+    view = MeteorSelectionView()
+    view.resize(800, 500)
+    image = QImage(200, 100, QImage.Format_RGB32)
+    image.fill(Qt.black)
+    view.set_image(image, 4000, 2000)
+    view.show()
+    app.processEvents()
+    view.fit_image()
+
+    def wheel_event(*, pixel_x: int = 0, pixel_y: int = 0, angle_y: int = 0) -> QWheelEvent:
+        center = QPointF(view.viewport().rect().center())
+        return QWheelEvent(
+            center,
+            QPointF(view.viewport().mapToGlobal(view.viewport().rect().center())),
+            QPoint(pixel_x, pixel_y),
+            QPoint(0, angle_y),
+            Qt.NoButton,
+            Qt.NoModifier,
+            Qt.ScrollUpdate,
+            False,
+        )
+
+    view.set_wheel_zoom_enabled(False)
+    view.set_touchpad_pinch_zoom_enabled(True)
+    view.scale(2.0, 2.0)
+    view.centerOn(QPointF(2000.0, 1000.0))
+    scale_before = view.transform().m11()
+    horizontal_before = view.horizontalScrollBar().value()
+    vertical_before = view.verticalScrollBar().value()
+    view.wheelEvent(wheel_event(angle_y=120))
+    assert view.transform().m11() == scale_before
+    view.wheelEvent(wheel_event(pixel_x=24, pixel_y=-36, angle_y=120))
+    assert view.transform().m11() == scale_before
+    assert view.horizontalScrollBar().value() == horizontal_before - 24
+    assert view.verticalScrollBar().value() == vertical_before + 36
+
+    view.set_wheel_zoom_enabled(True)
+    view.set_touchpad_pinch_zoom_enabled(False)
+    scale_before = view.transform().m11()
+    horizontal_before = view.horizontalScrollBar().value()
+    vertical_before = view.verticalScrollBar().value()
+    view.wheelEvent(wheel_event(pixel_x=24, pixel_y=-36, angle_y=120))
+    assert view.transform().m11() == scale_before
+    assert view.horizontalScrollBar().value() == horizontal_before
+    assert view.verticalScrollBar().value() == vertical_before
+    view.wheelEvent(wheel_event(angle_y=120))
+    assert view.transform().m11() > scale_before
     view.close()
 
 

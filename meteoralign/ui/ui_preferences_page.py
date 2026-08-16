@@ -692,7 +692,7 @@ class Ui_PreferencesPage(object):
         self.spinBoxAutoMatchDefaultSearchRadius.setSuffix(_translate("PreferencesPage", " px"))
         self.groupBoxViewInteraction.setTitle(_translate("PreferencesPage", "预览交互"))
         self.checkBoxWheelZoomEnabled.setText(_translate("PreferencesPage", "启用鼠标滚轮缩放预览视图"))
-        self.checkBoxTouchpadPinchZoomEnabled.setText(_translate("PreferencesPage", "启用触控板双指捏合缩放预览视图"))
+        self.checkBoxTouchpadPinchZoomEnabled.setText(_translate("PreferencesPage", "启用触控板手势操作预览视图"))
         self.groupBoxSequenceProcessingDefaults.setTitle(_translate("PreferencesPage", "图像序列解析默认值"))
         self.groupBoxSequenceProcessingDefaults.setToolTip(_translate("PreferencesPage", "只设置图像序列解析页下次启动时使用的默认值，不覆盖当前页面已输入的值。"))
         self.labelSequencePsfSearchRadiusDefault.setText(_translate("PreferencesPage", "默认匹配搜索半径"))

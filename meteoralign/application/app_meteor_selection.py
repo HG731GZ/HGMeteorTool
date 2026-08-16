@@ -90,9 +90,7 @@ class MeteorSelectionMixin:
         self._meteor_detection_detected_count = 0
         self._meteor_detection_active_provider = ""
         self._meteor_detection_engine_status = "正在启动检测引擎…"
-        self.ui.meteorSelectionView.set_touchpad_pinch_zoom_enabled(
-            bool(getattr(getattr(self, "ui_config", None), "touchpad_pinch_zoom_enabled", True))
-        )
+        self._apply_meteor_selection_zoom_preferences()
         table = self.ui.tableWidgetMeteorSelectionImages
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
         table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -104,6 +102,17 @@ class MeteorSelectionMixin:
         header.setSectionResizeMode(METEOR_SELECTION_NAME_COLUMN, QHeaderView.Stretch)
         header.setSectionResizeMode(METEOR_SELECTION_COUNT_COLUMN, QHeaderView.ResizeToContents)
         self._reset_meteor_selection_page()
+
+    def _apply_meteor_selection_zoom_preferences(self) -> None:
+        """把全局鼠标与触控板缩放开关同步到框选流星预览。"""
+
+        config = getattr(self, "ui_config", None)
+        self.ui.meteorSelectionView.set_wheel_zoom_enabled(
+            bool(getattr(config, "wheel_zoom_enabled", True))
+        )
+        self.ui.meteorSelectionView.set_touchpad_pinch_zoom_enabled(
+            bool(getattr(config, "touchpad_pinch_zoom_enabled", True))
+        )
 
     def _keep_meteor_selection_table_highlight_active(self, table) -> None:  # type: ignore[no-untyped-def]
         """让 Windows 下失焦的当前预览行仍使用与鼠标点击相同的蓝色。"""

@@ -217,7 +217,7 @@ PREFERENCE_COMMENTS: dict[str, str] = {
     "adjacent_landscape_ransac_confidence": "地景单应性 RANSAC 的目标置信度。",
     "adjacent_landscape_min_inlier_matches": "地景模式计算成功所需的最少 RANSAC 内点匹配数。",
     "wheel_zoom_enabled": "是否启用鼠标滚轮缩放预览视图。",
-    "touchpad_pinch_zoom_enabled": "是否启用触控板双指捏合缩放预览视图。",
+    "touchpad_pinch_zoom_enabled": "是否启用触控板双指拖动平移或捏合缩放预览视图。",
     "meteor_detection_engine_path": "MetDet worker 的可执行文件、源码文件或完整 onedir 目录；留空时自动查找。",
     "meteor_detection_model_path": "流星检测 ONNX 模型路径；留空时使用 worker 自带模型。",
     "meteor_detection_confidence_threshold": "流星检测置信度阈值，范围为 0 到 1。",

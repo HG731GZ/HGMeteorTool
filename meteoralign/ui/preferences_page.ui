@@ -232,7 +232,7 @@
          <property name="title"><string>预览交互</string></property>
          <layout class="QVBoxLayout" name="verticalLayoutViewInteraction">
           <item><widget class="QCheckBox" name="checkBoxWheelZoomEnabled"><property name="text"><string>启用鼠标滚轮缩放预览视图</string></property></widget></item>
-          <item><widget class="QCheckBox" name="checkBoxTouchpadPinchZoomEnabled"><property name="text"><string>启用触控板双指捏合缩放预览视图</string></property></widget></item>
+          <item><widget class="QCheckBox" name="checkBoxTouchpadPinchZoomEnabled"><property name="text"><string>启用触控板手势操作预览视图</string></property></widget></item>
           <item><spacer name="verticalSpacerViewInteraction"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>20</height></size></property></spacer></item>
          </layout>
         </widget>
